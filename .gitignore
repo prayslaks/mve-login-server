@@ -1,0 +1,27 @@
+# 의존성
+node_modules/
+
+# 환경 변수
+.env
+.env.local
+.env.production
+
+# 로그 파일
+*.log
+npm-debug.log*
+
+# OS 파일
+.DS_Store
+Thumbs.db
+
+# IDE 설정
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# SSL 인증서 (있는 경우)
+ssl/
+*.key
+*.crt
+*.pem
