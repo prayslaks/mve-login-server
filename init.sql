@@ -1,7 +1,6 @@
--- 데이터베이스 생성 (PostgreSQL CLI에서 실행)
--- CREATE DATABASE gamedb;
-
--- gamedb 데이터베이스에 연결 후 아래 테이블 생성
+-- psql에서 데이터베이스 생성
+-- CREATE DATABASE logindb;
+-- logindb 데이터베이스에 연결 후 아래 테이블 생성
 
 -- 사용자 테이블
 CREATE TABLE IF NOT EXISTS users (
