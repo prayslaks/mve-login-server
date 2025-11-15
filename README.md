@@ -191,20 +191,52 @@ $body = @"
 ```
 ```powershell
 # 방법 1: Invoke-RestMethod (권장)
-Invoke-RestMethod -Uri "http://localhost:3000/api/auth/signup" `
-    -Method Post `
-    -ContentType "application/json" `
-    -Body $body
+try {
+    $result = Invoke-RestMethod -Uri "http://localhost:3000/api/auth/signup" `
+        -Method POST `
+        -ContentType "application/json" `
+        -Body $body
+    
+    # 성공
+    Write-Host "Success!"
+    $result | ConvertTo-Json
+} catch {
+    # 에러
+    $statusCode = $_.Exception.Response.StatusCode.value__
+    $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+    $errorBody = $reader.ReadToEnd() | ConvertFrom-Json
+    $reader.Close()
+    
+    Write-Host "Status Code:" $statusCode
+    Write-Host "Error Code:" $errorBody.error
+    Write-Host "Message:" $errorBody.message
+    Write-Host "Details:" ($errorBody.details | ConvertTo-Json)
+}
 ```
 ```powershell
 # 방법 2: Invoke-WebRequest (상세 정보 필요 시)
-$response = Invoke-WebRequest -Uri "http://localhost:3000/api/auth/signup" `
-    -Method Post `
-    -ContentType "application/json" `
-    -Body $body
-
-$response.StatusCode
-$response.Content | ConvertFrom-Json
+try {
+    $response = Invoke-WebRequest -Uri "http://localhost:3000/api/auth/signup" `
+        -Method POST `
+        -ContentType "application/json" `
+        -Body $body
+    
+    # 성공 시 (200, 201 등)
+    Write-Host "Status Code:" $response.StatusCode
+    Write-Host "Content:" $response.Content
+} catch {
+    # 에러 시 (400, 401, 409, 500 등)
+    $errorResponse = $_.Exception.Response
+    $statusCode = $errorResponse.StatusCode.value__
+    
+    # 에러 응답 본문 읽기
+    $reader = New-Object System.IO.StreamReader($errorResponse.GetResponseStream())
+    $errorBody = $reader.ReadToEnd()
+    $reader.Close()
+    
+    Write-Host "Status Code:" $statusCode
+    Write-Host "Error Body:" $errorBody
+}
 ```
 
 **로그인:**
@@ -225,17 +257,52 @@ $body = @"
 ```
 ```powershell
 # 방법 1: Invoke-RestMethod (권장)
-$response = Invoke-RestMethod -Uri "http://localhost:3000/api/auth/login" `
-    -Method Post `
-    -ContentType "application/json" `
-    -Body $body
+try {
+    $result = Invoke-RestMethod -Uri "http://localhost:3000/api/auth/login" `
+        -Method POST `
+        -ContentType "application/json" `
+        -Body $body
+    
+    # 성공
+    Write-Host "Success!"
+    $result | ConvertTo-Json
+} catch {
+    # 에러
+    $statusCode = $_.Exception.Response.StatusCode.value__
+    $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+    $errorBody = $reader.ReadToEnd() | ConvertFrom-Json
+    $reader.Close()
+    
+    Write-Host "Status Code:" $statusCode
+    Write-Host "Error Code:" $errorBody.error
+    Write-Host "Message:" $errorBody.message
+    Write-Host "Details:" ($errorBody.details | ConvertTo-Json)
+}
 ```
 ```powershell
 # 방법 2: Invoke-WebRequest (상세 정보 필요 시)
-$response = Invoke-WebRequest -Uri "http://localhost:3000/api/auth/login" `
-    -Method Post `
-    -ContentType "application/json" `
-    -Body $body
+try {
+    $response = Invoke-WebRequest -Uri "http://localhost:3000/api/auth/signup" `
+        -Method POST `
+        -ContentType "application/json" `
+        -Body $body
+    
+    # 성공 시 (200, 201 등)
+    Write-Host "Status Code:" $response.StatusCode
+    Write-Host "Content:" $response.Content
+} catch {
+    # 에러 시 (400, 401, 409, 500 등)
+    $errorResponse = $_.Exception.Response
+    $statusCode = $errorResponse.StatusCode.value__
+    
+    # 에러 응답 본문 읽기
+    $reader = New-Object System.IO.StreamReader($errorResponse.GetResponseStream())
+    $errorBody = $reader.ReadToEnd()
+    $reader.Close()
+    
+    Write-Host "Status Code:" $statusCode
+    Write-Host "Error Body:" $errorBody
+}
 ```
 ``` powershell
 # JWT 토큰을 받아서 인증에 사용

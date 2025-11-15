@@ -24,6 +24,7 @@ router.post('/signup', async (req, res) => {
                 email: !!email
             });
             return res.status(400).json({
+                success: false,
                 error: 'MISSING_FIELDS',
                 message: 'All fields required',
                 details: {
@@ -42,6 +43,7 @@ router.post('/signup', async (req, res) => {
                 emailType: typeof email
             });
             return res.status(400).json({
+                success: false,
                 error: 'INVALID_INPUT_TYPE',
                 message: 'All fields must be strings'
             });
@@ -52,6 +54,7 @@ router.post('/signup', async (req, res) => {
         if (!emailRegex.test(email)) {
             console.log('[SIGNUP] ERROR: 잘못된 이메일 형식', { email });
             return res.status(400).json({
+                success: false,
                 error: 'INVALID_EMAIL_FORMAT',
                 message: 'Invalid email format'
             });
@@ -61,6 +64,7 @@ router.post('/signup', async (req, res) => {
         if (password.length < 6) {
             console.log('[SIGNUP] ERROR: 비밀번호 길이 부족', { length: password.length });
             return res.status(400).json({
+                success: false,
                 error: 'WEAK_PASSWORD',
                 message: 'Password must be at least 6 characters long'
             });
@@ -70,6 +74,7 @@ router.post('/signup', async (req, res) => {
         if (username.length < 3 || username.length > 20) {
             console.log('[SIGNUP] ERROR: 사용자명 길이 오류', { length: username.length });
             return res.status(400).json({
+                success: false,
                 error: 'INVALID_USERNAME_LENGTH',
                 message: 'Username must be between 3 and 20 characters'
             });
@@ -91,6 +96,7 @@ router.post('/signup', async (req, res) => {
                 value: duplicateField === 'username' ? username : email
             });
             return res.status(409).json({
+                success: false,
                 error: 'USER_ALREADY_EXISTS',
                 message: 'User already exists',
                 details: {
@@ -119,6 +125,7 @@ router.post('/signup', async (req, res) => {
         });
 
         res.status(201).json({
+            success: true,
             message: 'User created',
             user: result.rows[0]
         });
@@ -137,6 +144,7 @@ router.post('/signup', async (req, res) => {
             // PostgreSQL 에러 코드별 처리
             if (error.code === '23505') { // Unique violation
                 return res.status(409).json({
+                    success: false,
                     error: 'DUPLICATE_ENTRY',
                     message: 'Username or email already exists',
                     code: error.code
@@ -144,6 +152,7 @@ router.post('/signup', async (req, res) => {
             }
 
             return res.status(500).json({
+                success: false,
                 error: 'DATABASE_ERROR',
                 message: 'Database error',
                 code: error.code
@@ -153,12 +162,14 @@ router.post('/signup', async (req, res) => {
         // bcrypt 오류 구분
         if (error.message && error.message.includes('bcrypt')) {
             return res.status(500).json({
+                success: false,
                 error: 'ENCRYPTION_ERROR',
                 message: 'Password encryption error'
             });
         }
 
         res.status(500).json({
+            success: false,
             error: 'INTERNAL_SERVER_ERROR',
             message: 'Server error'
         });
@@ -176,6 +187,7 @@ router.post('/login', async (req, res) => {
         if (!username || !password) {
             console.log('[LOGIN] ERROR: 필수 필드 누락', { username: !!username, password: !!password });
             return res.status(400).json({
+                success: false,
                 error: 'MISSING_FIELDS',
                 message: 'Username and password required',
                 details: {
@@ -192,6 +204,7 @@ router.post('/login', async (req, res) => {
                 passwordType: typeof password
             });
             return res.status(400).json({
+                success: false,
                 error: 'INVALID_INPUT_TYPE',
                 message: 'Username and password must be strings'
             });
@@ -208,6 +221,7 @@ router.post('/login', async (req, res) => {
         if (result.rows.length === 0) {
             console.log('[LOGIN] ERROR: 사용자 없음', { username });
             return res.status(401).json({
+                success: false,
                 error: 'USER_NOT_FOUND',
                 message: 'Invalid credentials'
             });
@@ -223,6 +237,7 @@ router.post('/login', async (req, res) => {
         if (!validPassword) {
             console.log('[LOGIN] ERROR: 비밀번호 불일치', { username });
             return res.status(401).json({
+                success: false,
                 error: 'INVALID_PASSWORD',
                 message: 'Invalid credentials'
             });
@@ -232,6 +247,7 @@ router.post('/login', async (req, res) => {
         if (!process.env.JWT_SECRET) {
             console.error('[LOGIN] CRITICAL ERROR: JWT_SECRET 설정되지 않음');
             return res.status(500).json({
+                success: false,
                 error: 'SERVER_CONFIG_ERROR',
                 message: 'Server configuration error'
             });
@@ -252,6 +268,7 @@ router.post('/login', async (req, res) => {
         });
 
         res.json({
+            success: true,
             message: 'Login successful',
             token: token,
             user: {
@@ -272,6 +289,7 @@ router.post('/login', async (req, res) => {
         // DB 연결 오류 구분
         if (error.code) {
             return res.status(500).json({
+                success: false,
                 error: 'DATABASE_ERROR',
                 message: 'Database connection error',
                 code: error.code
@@ -281,6 +299,7 @@ router.post('/login', async (req, res) => {
         // bcrypt 오류 구분
         if (error.message && error.message.includes('bcrypt')) {
             return res.status(500).json({
+                success: false,
                 error: 'ENCRYPTION_ERROR',
                 message: 'Password verification error'
             });
@@ -289,12 +308,14 @@ router.post('/login', async (req, res) => {
         // JWT 오류 구분
         if (error.message && error.message.includes('jwt')) {
             return res.status(500).json({
+                success: false,
                 error: 'TOKEN_GENERATION_ERROR',
                 message: 'Token generation error'
             });
         }
 
         res.status(500).json({
+            success: false,
             error: 'INTERNAL_SERVER_ERROR',
             message: 'Server error'
         });
