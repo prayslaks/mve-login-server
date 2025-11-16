@@ -324,17 +324,97 @@ router.post('/login', async (req, res) => {
 
 // 토큰 검증 미들웨어
 const verifyToken = (req, res, next) => {
-    const token = req.headers['authorization']?.split(' ')[1]; // "Bearer TOKEN"
+    console.log('[AUTH] 토큰 검증 시도:', {
+        hasAuthHeader: !!req.headers['authorization'],
+        timestamp: new Date().toISOString()
+    });
+
+    const authHeader = req.headers['authorization'];
+
+    // Authorization 헤더 확인
+    if (!authHeader) {
+        console.log('[AUTH] ERROR: Authorization 헤더 없음');
+        return res.status(403).json({
+            success: false,
+            error: 'NO_AUTH_HEADER',
+            message: 'No authorization header provided'
+        });
+    }
+
+    // Bearer 토큰 형식 확인
+    if (!authHeader.startsWith('Bearer ')) {
+        console.log('[AUTH] ERROR: 잘못된 Authorization 헤더 형식', { authHeader });
+        return res.status(403).json({
+            success: false,
+            error: 'INVALID_AUTH_FORMAT',
+            message: 'Authorization header must start with "Bearer "'
+        });
+    }
+
+    const token = authHeader.split(' ')[1];
 
     if (!token) {
-        return res.status(403).json({ error: 'No token provided' });
+        console.log('[AUTH] ERROR: 토큰 없음');
+        return res.status(403).json({
+            success: false,
+            error: 'NO_TOKEN',
+            message: 'No token provided'
+        });
     }
+
+    // JWT_SECRET 확인
+    if (!process.env.JWT_SECRET) {
+        console.error('[AUTH] CRITICAL ERROR: JWT_SECRET 설정되지 않음');
+        return res.status(500).json({
+            success: false,
+            error: 'SERVER_CONFIG_ERROR',
+            message: 'Server configuration error'
+        });
+    }
+
+    console.log('[AUTH] JWT 검증 시작');
 
     jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
         if (err) {
-            return res.status(401).json({ error: 'Invalid token' });
+            console.log('[AUTH] ERROR: 토큰 검증 실패', {
+                error: err.name,
+                message: err.message
+            });
+
+            // 토큰 만료
+            if (err.name === 'TokenExpiredError') {
+                return res.status(401).json({
+                    success: false,
+                    error: 'TOKEN_EXPIRED',
+                    message: 'Token has expired',
+                    expiredAt: err.expiredAt
+                });
+            }
+
+            // 잘못된 토큰
+            if (err.name === 'JsonWebTokenError') {
+                return res.status(401).json({
+                    success: false,
+                    error: 'INVALID_TOKEN',
+                    message: 'Invalid token'
+                });
+            }
+
+            // 기타 JWT 에러
+            return res.status(401).json({
+                success: false,
+                error: 'TOKEN_VERIFICATION_FAILED',
+                message: 'Token verification failed'
+            });
         }
+
+        console.log('[AUTH] SUCCESS: 토큰 검증 성공', {
+            userId: decoded.userId,
+            username: decoded.username
+        });
+
         req.userId = decoded.userId;
+        req.username = decoded.username;
         next();
     });
 };
@@ -342,14 +422,64 @@ const verifyToken = (req, res, next) => {
 // 보호된 라우트 예시
 router.get('/profile', verifyToken, async (req, res) => {
     try {
+        console.log('[PROFILE] 프로필 조회 시도:', {
+            userId: req.userId,
+            username: req.username,
+            timestamp: new Date().toISOString()
+        });
+
+        // DB에서 사용자 정보 조회
+        console.log('[PROFILE] DB 조회 시작:', { userId: req.userId });
         const result = await pool.query(
-            'SELECT id, username, email FROM users WHERE id = $1',
+            'SELECT id, username, email, created_at FROM users WHERE id = $1',
             [req.userId]
         );
+        console.log('[PROFILE] DB 조회 완료:', { found: result.rows.length > 0 });
 
-        res.json({ user: result.rows[0] });
+        // 사용자가 존재하지 않는 경우 (토큰은 유효하지만 사용자가 삭제된 경우)
+        if (result.rows.length === 0) {
+            console.log('[PROFILE] ERROR: 사용자 없음', { userId: req.userId });
+            return res.status(404).json({
+                success: false,
+                error: 'USER_NOT_FOUND',
+                message: 'User not found'
+            });
+        }
+
+        console.log('[PROFILE] SUCCESS: 프로필 조회 성공', {
+            userId: result.rows[0].id,
+            username: result.rows[0].username
+        });
+
+        res.json({
+            success: true,
+            user: result.rows[0]
+        });
+
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        console.error('[PROFILE] EXCEPTION:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+            code: error.code,
+            timestamp: new Date().toISOString()
+        });
+
+        // DB 연결 오류 구분
+        if (error.code) {
+            return res.status(500).json({
+                success: false,
+                error: 'DATABASE_ERROR',
+                message: 'Database error',
+                code: error.code
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'INTERNAL_SERVER_ERROR',
+            message: 'Server error'
+        });
     }
 });
 
