@@ -26,11 +26,13 @@ PostgreSQL과 JWT를 사용하는 Node.js 인증 서버로, Amazon Web Services 
 ## 기능
 
 - ✅ JWT 기반 인증
+- ✅ 이메일 인증 시스템 (6자리 인증번호)
 - ✅ bcrypt 비밀번호 해싱
 - ✅ PostgreSQL 데이터베이스
 - ✅ 상세한 오류 처리 및 디버깅 로그
 - ✅ CORS 지원
 - ✅ 입력값 유효성 검증
+- ✅ Rate limiting (인증번호 발송 제한)
 
 ---
 
@@ -95,10 +97,22 @@ CREATE DATABASE logindb;
 \i init.sql
 ```
 
-**로컬 Windows (명령줄에서 바로 실행):**
+**로컬 Windows 명령줄 (관리자 권한 실행):**
+
+**신규 설치 (처음 설정하는 경우):**
 ```powershell
 psql -U postgres -d logindb -f init.sql
 ```
+
+**기존 데이터베이스 업데이트 (이미 users 테이블이 있는 경우):**
+```powershell
+# 이메일 인증 기능만 추가
+psql -U postgres -d logindb -f migration_add_email_verification.sql
+```
+
+**⚠️ 중요**:
+- `init.sql`은 **신규 설치 전용**입니다. 기존 테이블이 있으면 건너뜁니다.
+- 프로덕션 환경에서 기능을 추가할 때는 **마이그레이션 스크립트**를 사용하세요.
 
 ---
 
@@ -114,6 +128,10 @@ DB_USER=postgres
 DB_PASSWORD=your_actual_password   # PostgreSQL 비밀번호로 변경
 DB_NAME=logindb
 JWT_SECRET=your-strong-secret-key  # 32자 강력한 비밀 키로 변경
+
+# 이메일 인증 설정 (Naver 메일 사용 예시)
+EMAIL_USER=your_email@naver.com    # 발신 이메일 주소
+EMAIL_PASSWORD=your_password       # Naver 계정 비밀번호
 ```
 
 ### JWT 암호키 생성
@@ -125,6 +143,100 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 # OpenSSL 사용
 openssl rand -hex 32
 ```
+
+### 이메일 SMTP 설정
+
+이 프로젝트는 이메일 인증번호 발송을 위해 SMTP를 사용합니다. 다양한 이메일 서비스를 지원합니다.
+
+#### 옵션 1: Naver 메일 (현재 기본 설정)
+
+Naver 메일은 앱 비밀번호 없이 일반 계정 비밀번호로 사용 가능합니다.
+
+```env
+EMAIL_USER=your_email@naver.com
+EMAIL_PASSWORD=your_naver_password
+```
+
+**routes/auth.js 설정 (기본값):**
+```javascript
+const transporter = nodemailer.createTransport({
+    host: 'smtp.naver.com',
+    port: 587,
+    secure: false,
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD
+    }
+});
+```
+
+#### 옵션 2: Gmail
+
+Gmail은 2단계 인증 후 앱 비밀번호를 발급받아야 합니다.
+
+**1. Gmail 앱 비밀번호 설정:**
+1. Google 계정에서 2단계 인증 활성화
+2. [Google 앱 비밀번호 페이지](https://myaccount.google.com/apppasswords) 접속
+3. "앱 선택" → "기타(맞춤 이름)" 선택 → "MVE Login Server" 입력
+4. "생성" 클릭하여 16자리 앱 비밀번호 생성
+5. 생성된 비밀번호를 `.env` 파일의 `EMAIL_PASSWORD`에 입력 (공백 제거)
+
+**2. .env 파일 설정:**
+```env
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASSWORD=abcdefghijklmnop  # 16자리 앱 비밀번호 (공백 제거)
+```
+
+**3. routes/auth.js 수정:**
+```javascript
+const transporter = nodemailer.createTransport({
+    service: 'gmail',  // host, port, secure 대신 service 사용
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD
+    }
+});
+```
+
+#### 옵션 3: 기타 이메일 서비스
+
+**Outlook/Hotmail:**
+```javascript
+const transporter = nodemailer.createTransport({
+    host: 'smtp-mail.outlook.com',
+    port: 587,
+    secure: false,
+    auth: {
+        user: process.env.EMAIL_USER,  // your_email@outlook.com
+        pass: process.env.EMAIL_PASSWORD
+    }
+});
+```
+
+**직접 SMTP 서버 설정:**
+```javascript
+const transporter = nodemailer.createTransport({
+    host: 'smtp.example.com',
+    port: 587,
+    secure: false,  // true for 465, false for other ports
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD
+    }
+});
+```
+
+#### SMTP 설정 참고사항
+
+| 서비스 | SMTP 서버 | 포트 | 앱 비밀번호 필요 | 일일 전송 제한 |
+|--------|-----------|------|-----------------|---------------|
+| Naver | smtp.naver.com | 587 | 불필요 | 제한 없음* |
+| Gmail | smtp.gmail.com | 587 | 필수 | 500통 |
+| Outlook | smtp-mail.outlook.com | 587 | 불필요 | 300통 |
+| SendGrid | smtp.sendgrid.net | 587 | API Key 사용 | 100통 (무료) |
+| Amazon SES | email-smtp.{region}.amazonaws.com | 587 | IAM 자격증명 | 62,000통/월 (무료) |
+
+*Naver는 공식 제한이 없으나 과도한 사용 시 제재 가능
 
 ---
 
@@ -165,6 +277,63 @@ pm2 logs mve-login-server
 ### 헬스 체크
 ```
 GET /health
+```
+
+### 이메일 중복 확인
+```
+POST /api/auth/check-email
+Content-Type: application/json
+
+{
+  "email": "test@example.com"
+}
+```
+
+**응답 (200 OK):**
+```json
+{
+  "success": true,
+  "exists": false,
+  "message": "Email is available"
+}
+```
+
+### 인증번호 발송
+```
+POST /api/auth/send-verification
+Content-Type: application/json
+
+{
+  "email": "test@example.com"
+}
+```
+
+**응답 (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Verification code sent to email",
+  "expiresIn": 300
+}
+```
+
+### 인증번호 검증
+```
+POST /api/auth/verify-code
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "code": "123456"
+}
+```
+
+**응답 (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Email verified successfully"
+}
 ```
 
 ### 회원가입
@@ -362,6 +531,7 @@ mve-login-server/
 - **pg** - PostgreSQL 클라이언트
 - **bcrypt** - 비밀번호 해싱
 - **jsonwebtoken** - JWT 토큰 생성/검증
+- **nodemailer** - 이메일 전송
 - **dotenv** - 환경 변수 관리
 - **cors** - CORS 처리
 
@@ -376,7 +546,7 @@ mve-login-server/
 
 ## 라이선스
 
-이 프로젝트는 교육 목적으로 개발되었습니다.
+이 프로젝트는 포트폴리오 목적으로 개발되었습니다.
 
 ---
 

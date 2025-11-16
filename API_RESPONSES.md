@@ -25,7 +25,149 @@
 
 ---
 
-## 1. 회원가입 (POST /api/auth/signup)
+## 1. 이메일 중복 확인 (POST /api/auth/check-email)
+
+### 요청
+```json
+{
+  "email": "test@example.com"
+}
+```
+
+### 성공 응답 (200 OK)
+```json
+{
+  "success": true,
+  "exists": false,
+  "message": "Email is available"
+}
+```
+
+### 오류 응답
+
+#### 400 Bad Request
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `MISSING_EMAIL` | 이메일 필드 누락 | `{ "success": false, "error": "MISSING_EMAIL", "message": "Email is required" }` |
+| `INVALID_INPUT_TYPE` | 입력값 타입 오류 | `{ "success": false, "error": "INVALID_INPUT_TYPE", "message": "Email must be a string" }` |
+| `INVALID_EMAIL_FORMAT` | 이메일 형식 오류 | `{ "success": false, "error": "INVALID_EMAIL_FORMAT", "message": "Invalid email format" }` |
+
+#### 500 Internal Server Error
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `DATABASE_ERROR` | 데이터베이스 오류 | `{ "success": false, "error": "DATABASE_ERROR", "message": "Database error", "code": "..." }` |
+| `INTERNAL_SERVER_ERROR` | 기타 서버 오류 | `{ "success": false, "error": "INTERNAL_SERVER_ERROR", "message": "Server error" }` |
+
+---
+
+## 2. 인증번호 발송 (POST /api/auth/send-verification)
+
+### 요청
+```json
+{
+  "email": "test@example.com"
+}
+```
+
+### 성공 응답 (200 OK)
+```json
+{
+  "success": true,
+  "message": "Verification code sent to email",
+  "expiresIn": 300
+}
+```
+
+### 오류 응답
+
+#### 400 Bad Request
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `MISSING_EMAIL` | 이메일 필드 누락 | `{ "success": false, "error": "MISSING_EMAIL", "message": "Email is required" }` |
+| `INVALID_INPUT_TYPE` | 입력값 타입 오류 | `{ "success": false, "error": "INVALID_INPUT_TYPE", "message": "Email must be a string" }` |
+| `INVALID_EMAIL_FORMAT` | 이메일 형식 오류 | `{ "success": false, "error": "INVALID_EMAIL_FORMAT", "message": "Invalid email format" }` |
+
+#### 429 Too Many Requests
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `TOO_MANY_REQUESTS` | 1분 이내 재전송 시도 | `{ "success": false, "error": "TOO_MANY_REQUESTS", "message": "Please wait before requesting another code", "retryAfter": 45 }` |
+
+#### 500 Internal Server Error
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `EMAIL_SEND_ERROR` | 이메일 전송 실패 | `{ "success": false, "error": "EMAIL_SEND_ERROR", "message": "Failed to send verification email" }` |
+| `DATABASE_ERROR` | 데이터베이스 오류 | `{ "success": false, "error": "DATABASE_ERROR", "message": "Database error", "code": "..." }` |
+| `INTERNAL_SERVER_ERROR` | 기타 서버 오류 | `{ "success": false, "error": "INTERNAL_SERVER_ERROR", "message": "Server error" }` |
+
+---
+
+## 3. 인증번호 검증 (POST /api/auth/verify-code)
+
+### 요청
+```json
+{
+  "email": "test@example.com",
+  "code": "123456"
+}
+```
+
+### 성공 응답 (200 OK)
+```json
+{
+  "success": true,
+  "message": "Email verified successfully"
+}
+```
+
+### 오류 응답
+
+#### 400 Bad Request
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `MISSING_FIELDS` | 필수 필드 누락 | `{ "success": false, "error": "MISSING_FIELDS", "message": "Email and code are required", "details": { "email": "Email is required", "code": "OK" } }` |
+| `INVALID_INPUT_TYPE` | 입력값 타입 오류 | `{ "success": false, "error": "INVALID_INPUT_TYPE", "message": "Email and code must be strings" }` |
+| `INVALID_CODE_FORMAT` | 인증번호 형식 오류 (6자리 숫자 아님) | `{ "success": false, "error": "INVALID_CODE_FORMAT", "message": "Code must be 6 digits" }` |
+
+#### 401 Unauthorized
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `INVALID_CODE` | 인증번호 불일치 | `{ "success": false, "error": "INVALID_CODE", "message": "Invalid verification code", "attemptsRemaining": 4 }` |
+
+#### 404 Not Found
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `CODE_NOT_FOUND` | 해당 이메일의 인증번호 없음 | `{ "success": false, "error": "CODE_NOT_FOUND", "message": "No verification code found for this email" }` |
+
+#### 410 Gone
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `CODE_EXPIRED` | 인증번호 만료 (5분 경과) | `{ "success": false, "error": "CODE_EXPIRED", "message": "Verification code has expired" }` |
+
+#### 429 Too Many Requests
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `TOO_MANY_ATTEMPTS` | 5회 시도 초과 | `{ "success": false, "error": "TOO_MANY_ATTEMPTS", "message": "Too many failed attempts. Please request a new code." }` |
+
+#### 500 Internal Server Error
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `DATABASE_ERROR` | 데이터베이스 오류 | `{ "success": false, "error": "DATABASE_ERROR", "message": "Database error", "code": "..." }` |
+| `INTERNAL_SERVER_ERROR` | 기타 서버 오류 | `{ "success": false, "error": "INTERNAL_SERVER_ERROR", "message": "Server error" }` |
+
+---
+
+## 4. 회원가입 (POST /api/auth/signup)
 
 ### 요청
 ```json
@@ -78,7 +220,7 @@
 
 ---
 
-## 2. 로그인 (POST /api/auth/login)
+## 5. 로그인 (POST /api/auth/login)
 
 ### 요청
 ```json
@@ -130,7 +272,7 @@
 
 ---
 
-## 3. 프로필 조회 (GET /api/auth/profile)
+## 6. 프로필 조회 (GET /api/auth/profile)
 
 ### 요청
 ```
@@ -189,13 +331,15 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 | 상태 코드 | 의미 | 사용 케이스 |
 |---------|------|------------|
-| 200 | OK | 로그인 성공, 프로필 조회 성공 |
+| 200 | OK | 이메일 중복 확인, 인증번호 발송/검증, 로그인 성공, 프로필 조회 성공 |
 | 201 | Created | 회원가입 성공 |
 | 400 | Bad Request | 입력값 검증 실패 |
-| 401 | Unauthorized | 인증 실패 (잘못된 비밀번호, 만료된 토큰) |
+| 401 | Unauthorized | 인증 실패 (잘못된 비밀번호, 인증번호 불일치, 만료된 토큰) |
 | 403 | Forbidden | 인증 정보 없음 (토큰 미제공) |
-| 404 | Not Found | 리소스 없음 (사용자 삭제됨) |
+| 404 | Not Found | 리소스 없음 (사용자 삭제됨, 인증번호 없음) |
 | 409 | Conflict | 리소스 충돌 (중복 회원가입) |
+| 410 | Gone | 리소스 만료 (인증번호 만료) |
+| 429 | Too Many Requests | 요청 제한 초과 (인증번호 재전송 제한, 시도 횟수 초과) |
 | 500 | Internal Server Error | 서버 내부 오류 |
 
 ---
@@ -226,6 +370,18 @@ switch (error.error) {
   case 'WEAK_PASSWORD':
     // 비밀번호 강도 요구사항 안내
     showError('비밀번호는 최소 6자 이상이어야 합니다.');
+    break;
+  case 'CODE_EXPIRED':
+    // 인증번호 만료 - 재전송 유도
+    showError('인증번호가 만료되었습니다. 새로운 인증번호를 요청해주세요.');
+    break;
+  case 'TOO_MANY_ATTEMPTS':
+    // 시도 횟수 초과 - 재전송 유도
+    showError('인증 시도 횟수를 초과했습니다. 새로운 인증번호를 요청해주세요.');
+    break;
+  case 'TOO_MANY_REQUESTS':
+    // Rate limiting - 대기 안내
+    showError(`${error.retryAfter}초 후에 다시 시도해주세요.`);
     break;
   default:
     // 일반 에러 메시지

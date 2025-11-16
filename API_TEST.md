@@ -6,6 +6,12 @@
 
 ## 목차
 - [PowerShell 테스트](#powershell-테스트)
+  - [이메일 중복 확인](#이메일-중복-확인)
+  - [인증번호 발송](#인증번호-발송)
+  - [인증번호 검증](#인증번호-검증)
+  - [회원가입](#회원가입)
+  - [로그인](#로그인)
+  - [프로필 조회](#프로필-조회)
 - [curl 테스트](#curl-테스트)
 - [전체 시나리오 테스트](#전체-시나리오-테스트)
 
@@ -25,6 +31,114 @@ Invoke-RestMethod -Uri "http://localhost:3000/health"
 $response = Invoke-WebRequest -Uri "http://localhost:3000/health"
 $response.Content | ConvertFrom-Json
 $response.StatusCode
+```
+
+---
+
+### 이메일 중복 확인
+
+```powershell
+$body = @{
+    email = "test@example.com"
+} | ConvertTo-Json
+
+try {
+    $result = Invoke-RestMethod -Uri "http://localhost:3000/api/auth/check-email" `
+        -Method POST `
+        -ContentType "application/json" `
+        -Body $body
+
+    if ($result.success) {
+        if ($result.exists) {
+            Write-Host "이메일이 이미 사용 중입니다." -ForegroundColor Yellow
+        } else {
+            Write-Host "사용 가능한 이메일입니다." -ForegroundColor Green
+        }
+    }
+} catch {
+    $statusCode = $_.Exception.Response.StatusCode.value__
+    Write-Host "Status Code: $statusCode" -ForegroundColor Red
+
+    if ($_.ErrorDetails.Message) {
+        $errorBody = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Host "Error: $($errorBody.error)" -ForegroundColor Red
+        Write-Host "Message: $($errorBody.message)"
+    }
+}
+```
+
+---
+
+### 인증번호 발송
+
+```powershell
+$body = @{
+    email = "test@example.com"
+} | ConvertTo-Json
+
+try {
+    $result = Invoke-RestMethod -Uri "http://localhost:3000/api/auth/send-verification" `
+        -Method POST `
+        -ContentType "application/json" `
+        -Body $body
+
+    if ($result.success) {
+        Write-Host "인증번호가 이메일로 전송되었습니다!" -ForegroundColor Green
+        Write-Host "유효시간: $($result.expiresIn)초"
+        Write-Host "이메일을 확인하여 6자리 인증번호를 입력하세요."
+    }
+} catch {
+    $statusCode = $_.Exception.Response.StatusCode.value__
+    Write-Host "Status Code: $statusCode" -ForegroundColor Red
+
+    if ($_.ErrorDetails.Message) {
+        $errorBody = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Host "Error: $($errorBody.error)" -ForegroundColor Red
+        Write-Host "Message: $($errorBody.message)"
+
+        # Rate limiting 에러인 경우
+        if ($errorBody.error -eq "TOO_MANY_REQUESTS") {
+            Write-Host "다시 시도까지 남은 시간: $($errorBody.retryAfter)초" -ForegroundColor Yellow
+        }
+    }
+}
+```
+
+---
+
+### 인증번호 검증
+
+```powershell
+$body = @{
+    email = "test@example.com"
+    code = "123456"  # 이메일로 받은 6자리 인증번호
+} | ConvertTo-Json
+
+try {
+    $result = Invoke-RestMethod -Uri "http://localhost:3000/api/auth/verify-code" `
+        -Method POST `
+        -ContentType "application/json" `
+        -Body $body
+
+    if ($result.success) {
+        Write-Host "이메일 인증 성공!" -ForegroundColor Green
+        Write-Host $result.message
+    }
+} catch {
+    $statusCode = $_.Exception.Response.StatusCode.value__
+    Write-Host "Status Code: $statusCode" -ForegroundColor Red
+
+    if ($_.ErrorDetails.Message) {
+        $errorBody = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Host "Error: $($errorBody.error)" -ForegroundColor Red
+        Write-Host "Message: $($errorBody.message)"
+
+        # 잘못된 인증번호인 경우 남은 시도 횟수 표시
+        if ($errorBody.error -eq "INVALID_CODE" -and $errorBody.attemptsRemaining) {
+            Write-Host "남은 시도 횟수: $($errorBody.attemptsRemaining)" -ForegroundColor Yellow
+        }
+    }
+}
 ```
 
 ---
@@ -275,6 +389,37 @@ try {
 curl http://localhost:3000/health
 ```
 
+### 이메일 중복 확인
+
+```bash
+curl -X POST http://localhost:3000/api/auth/check-email \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com"
+  }'
+```
+
+### 인증번호 발송
+
+```bash
+curl -X POST http://localhost:3000/api/auth/send-verification \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com"
+  }'
+```
+
+### 인증번호 검증
+
+```bash
+curl -X POST http://localhost:3000/api/auth/verify-code \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "code": "123456"
+  }'
+```
+
 ### 회원가입
 
 ```bash
@@ -330,11 +475,60 @@ try {
     exit
 }
 
-# 2. 회원가입
-Write-Host "`n[2] 회원가입 테스트..." -ForegroundColor Yellow
+# 2. 이메일 중복 확인
+Write-Host "`n[2] 이메일 중복 확인..." -ForegroundColor Yellow
+$testEmail = "test_$(Get-Random -Minimum 1000 -Maximum 9999)@example.com"
+$checkEmailBody = @{
+    email = $testEmail
+} | ConvertTo-Json
+
+try {
+    $emailCheck = Invoke-RestMethod -Uri "$baseUrl/api/auth/check-email" `
+        -Method POST `
+        -ContentType "application/json" `
+        -Body $checkEmailBody
+
+    if ($emailCheck.success -and -not $emailCheck.exists) {
+        Write-Host "✓ 사용 가능한 이메일: $testEmail" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "✗ 이메일 확인 실패" -ForegroundColor Red
+    if ($_.ErrorDetails.Message) {
+        $error = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Host "  Error: $($error.error)"
+    }
+    exit
+}
+
+# 3. 인증번호 발송 (선택사항 - 실제 이메일 발송이 설정된 경우에만)
+Write-Host "`n[3] 인증번호 발송 테스트 (선택사항)..." -ForegroundColor Yellow
+Write-Host "  이메일 인증 테스트를 건너뜁니다. (수동 테스트 권장)" -ForegroundColor Gray
+# 실제 이메일로 테스트하려면 아래 주석 해제:
+# try {
+#     $verifyBody = @{ email = $testEmail } | ConvertTo-Json
+#     $verifyResult = Invoke-RestMethod -Uri "$baseUrl/api/auth/send-verification" `
+#         -Method POST `
+#         -ContentType "application/json" `
+#         -Body $verifyBody
+#     Write-Host "✓ 인증번호 발송 성공 (유효시간: $($verifyResult.expiresIn)초)" -ForegroundColor Green
+#
+#     # 인증번호 입력 받기
+#     $code = Read-Host "  이메일로 받은 6자리 인증번호를 입력하세요"
+#     $codeBody = @{ email = $testEmail; code = $code } | ConvertTo-Json
+#     $codeResult = Invoke-RestMethod -Uri "$baseUrl/api/auth/verify-code" `
+#         -Method POST `
+#         -ContentType "application/json" `
+#         -Body $codeBody
+#     Write-Host "✓ 이메일 인증 성공" -ForegroundColor Green
+# } catch {
+#     Write-Host "✗ 이메일 인증 실패" -ForegroundColor Red
+# }
+
+# 4. 회원가입
+Write-Host "`n[4] 회원가입 테스트..." -ForegroundColor Yellow
 $signupBody = @{
     username = "testuser_$(Get-Random -Minimum 1000 -Maximum 9999)"
-    email = "test_$(Get-Random -Minimum 1000 -Maximum 9999)@example.com"
+    email = $testEmail
     password = "password123"
 } | ConvertTo-Json
 
@@ -359,8 +553,8 @@ try {
     exit
 }
 
-# 3. 로그인
-Write-Host "`n[3] 로그인 테스트..." -ForegroundColor Yellow
+# 5. 로그인
+Write-Host "`n[5] 로그인 테스트..." -ForegroundColor Yellow
 $loginBody = @{
     username = $testUsername
     password = "password123"
@@ -386,8 +580,8 @@ try {
     exit
 }
 
-# 4. 프로필 조회
-Write-Host "`n[4] 프로필 조회 테스트..." -ForegroundColor Yellow
+# 6. 프로필 조회
+Write-Host "`n[6] 프로필 조회 테스트..." -ForegroundColor Yellow
 $headers = @{
     "Authorization" = "Bearer $token"
 }

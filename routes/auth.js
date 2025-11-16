@@ -1,11 +1,409 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 const pool = require('../db');
 
 const router = express.Router();
 
-// 회원가입
+// 이메일 전송을 위한 nodemailer 설정
+const transporter = nodemailer.createTransport({
+    host: 'smtp.naver.com',
+    port: 587,
+    secure: false,
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD
+    }
+});
+
+// 6자리 랜덤 인증번호 생성
+const generateVerificationCode = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// 1. 이메일 중복 확인
+router.post('/check-email', async (req, res) => {
+    try {
+        console.log('[CHECK-EMAIL] 이메일 중복 확인 시도:', {
+            email: req.body.email,
+            timestamp: new Date().toISOString()
+        });
+
+        const { email } = req.body;
+
+        // 입력값 검증
+        if (!email) {
+            console.log('[CHECK-EMAIL] ERROR: 이메일 누락');
+            return res.status(400).json({
+                success: false,
+                error: 'MISSING_EMAIL',
+                message: 'Email is required'
+            });
+        }
+
+        if (typeof email !== 'string') {
+            console.log('[CHECK-EMAIL] ERROR: 잘못된 입력 타입');
+            return res.status(400).json({
+                success: false,
+                error: 'INVALID_INPUT_TYPE',
+                message: 'Email must be a string'
+            });
+        }
+
+        // 이메일 형식 검증
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            console.log('[CHECK-EMAIL] ERROR: 잘못된 이메일 형식', { email });
+            return res.status(400).json({
+                success: false,
+                error: 'INVALID_EMAIL_FORMAT',
+                message: 'Invalid email format'
+            });
+        }
+
+        // DB에서 이메일 중복 확인
+        console.log('[CHECK-EMAIL] DB 조회 시작:', { email });
+        const result = await pool.query(
+            'SELECT email FROM users WHERE email = $1',
+            [email]
+        );
+        console.log('[CHECK-EMAIL] DB 조회 완료:', { exists: result.rows.length > 0 });
+
+        const exists = result.rows.length > 0;
+
+        console.log('[CHECK-EMAIL] SUCCESS:', { email, exists });
+
+        res.json({
+            success: true,
+            exists: exists,
+            message: exists ? 'Email already in use' : 'Email is available'
+        });
+
+    } catch (error) {
+        console.error('[CHECK-EMAIL] EXCEPTION:', {
+            message: error.message,
+            stack: error.stack,
+            code: error.code,
+            timestamp: new Date().toISOString()
+        });
+
+        if (error.code) {
+            return res.status(500).json({
+                success: false,
+                error: 'DATABASE_ERROR',
+                message: 'Database error',
+                code: error.code
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'INTERNAL_SERVER_ERROR',
+            message: 'Server error'
+        });
+    }
+});
+
+// 2. 인증번호 발송
+router.post('/send-verification', async (req, res) => {
+    try {
+        console.log('[SEND-VERIFICATION] 인증번호 발송 시도:', {
+            email: req.body.email,
+            timestamp: new Date().toISOString()
+        });
+
+        const { email } = req.body;
+
+        // 입력값 검증
+        if (!email) {
+            console.log('[SEND-VERIFICATION] ERROR: 이메일 누락');
+            return res.status(400).json({
+                success: false,
+                error: 'MISSING_EMAIL',
+                message: 'Email is required'
+            });
+        }
+
+        if (typeof email !== 'string') {
+            console.log('[SEND-VERIFICATION] ERROR: 잘못된 입력 타입');
+            return res.status(400).json({
+                success: false,
+                error: 'INVALID_INPUT_TYPE',
+                message: 'Email must be a string'
+            });
+        }
+
+        // 이메일 형식 검증
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            console.log('[SEND-VERIFICATION] ERROR: 잘못된 이메일 형식', { email });
+            return res.status(400).json({
+                success: false,
+                error: 'INVALID_EMAIL_FORMAT',
+                message: 'Invalid email format'
+            });
+        }
+
+        // Rate limiting: 1분 이내 재전송 방지
+        console.log('[SEND-VERIFICATION] Rate limiting 확인');
+        const recentCheck = await pool.query(
+            'SELECT * FROM email_verifications WHERE email = $1 AND created_at > NOW() - INTERVAL \'1 minute\' ORDER BY created_at DESC LIMIT 1',
+            [email]
+        );
+
+        if (recentCheck.rows.length > 0) {
+            console.log('[SEND-VERIFICATION] ERROR: 재전송 제한', { email });
+            const timeDiff = Math.ceil((60000 - (Date.now() - new Date(recentCheck.rows[0].created_at).getTime())) / 1000);
+            return res.status(429).json({
+                success: false,
+                error: 'TOO_MANY_REQUESTS',
+                message: 'Please wait before requesting another code',
+                retryAfter: timeDiff
+            });
+        }
+
+        // 만료된 인증번호 삭제
+        console.log('[SEND-VERIFICATION] 만료된 인증번호 삭제');
+        await pool.query('SELECT delete_expired_verifications()');
+
+        // 기존 미검증 인증번호 무효화 (verified = true로 표시하여 재사용 방지)
+        console.log('[SEND-VERIFICATION] 기존 인증번호 무효화');
+        await pool.query(
+            'UPDATE email_verifications SET verified = TRUE WHERE email = $1 AND verified = FALSE',
+            [email]
+        );
+
+        // 6자리 인증번호 생성
+        const code = generateVerificationCode();
+        console.log('[SEND-VERIFICATION] 인증번호 생성 완료');
+
+        // DB에 저장 (5분 유효)
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+        console.log('[SEND-VERIFICATION] DB 저장 시작');
+        await pool.query(
+            'INSERT INTO email_verifications (email, code, expires_at) VALUES ($1, $2, $3)',
+            [email, code, expiresAt]
+        );
+        console.log('[SEND-VERIFICATION] DB 저장 완료');
+
+        // 이메일 전송
+        console.log('[SEND-VERIFICATION] 이메일 전송 시작');
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: 'MVE Login - 이메일 인증번호',
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #333;">이메일 인증</h2>
+                    <p>안녕하세요,</p>
+                    <p>요청하신 인증번호는 다음과 같습니다:</p>
+                    <div style="background-color: #f4f4f4; padding: 20px; text-align: center; margin: 20px 0;">
+                        <h1 style="color: #4CAF50; margin: 0; letter-spacing: 5px;">${code}</h1>
+                    </div>
+                    <p>이 인증번호는 <strong>5분간</strong> 유효합니다.</p>
+                    <p>본인이 요청하지 않았다면 이 메일을 무시하세요.</p>
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                    <p style="color: #888; font-size: 12px;">MVE Login Server</p>
+                </div>
+            `
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log('[SEND-VERIFICATION] 이메일 전송 완료');
+
+        console.log('[SEND-VERIFICATION] SUCCESS:', { email });
+
+        res.json({
+            success: true,
+            message: 'Verification code sent to email',
+            expiresIn: 300 // 초 단위
+        });
+
+    } catch (error) {
+        console.error('[SEND-VERIFICATION] EXCEPTION:', {
+            message: error.message,
+            stack: error.stack,
+            code: error.code,
+            timestamp: new Date().toISOString()
+        });
+
+        // 이메일 전송 오류
+        if (error.message && error.message.includes('mail')) {
+            return res.status(500).json({
+                success: false,
+                error: 'EMAIL_SEND_ERROR',
+                message: 'Failed to send verification email'
+            });
+        }
+
+        if (error.code) {
+            return res.status(500).json({
+                success: false,
+                error: 'DATABASE_ERROR',
+                message: 'Database error',
+                code: error.code
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'INTERNAL_SERVER_ERROR',
+            message: 'Server error'
+        });
+    }
+});
+
+// 3. 인증번호 검증
+router.post('/verify-code', async (req, res) => {
+    try {
+        console.log('[VERIFY-CODE] 인증번호 검증 시도:', {
+            email: req.body.email,
+            timestamp: new Date().toISOString()
+        });
+
+        const { email, code } = req.body;
+
+        // 입력값 검증
+        if (!email || !code) {
+            console.log('[VERIFY-CODE] ERROR: 필수 필드 누락', {
+                email: !!email,
+                code: !!code
+            });
+            return res.status(400).json({
+                success: false,
+                error: 'MISSING_FIELDS',
+                message: 'Email and code are required',
+                details: {
+                    email: !email ? 'Email is required' : 'OK',
+                    code: !code ? 'Code is required' : 'OK'
+                }
+            });
+        }
+
+        if (typeof email !== 'string' || typeof code !== 'string') {
+            console.log('[VERIFY-CODE] ERROR: 잘못된 입력 타입');
+            return res.status(400).json({
+                success: false,
+                error: 'INVALID_INPUT_TYPE',
+                message: 'Email and code must be strings'
+            });
+        }
+
+        // 인증번호 형식 검증 (6자리 숫자)
+        if (!/^\d{6}$/.test(code)) {
+            console.log('[VERIFY-CODE] ERROR: 잘못된 인증번호 형식', { code });
+            return res.status(400).json({
+                success: false,
+                error: 'INVALID_CODE_FORMAT',
+                message: 'Code must be 6 digits'
+            });
+        }
+
+        // 만료된 인증번호 삭제
+        console.log('[VERIFY-CODE] 만료된 인증번호 삭제');
+        await pool.query('SELECT delete_expired_verifications()');
+
+        // DB에서 인증번호 조회
+        console.log('[VERIFY-CODE] DB 조회 시작:', { email });
+        const result = await pool.query(
+            'SELECT * FROM email_verifications WHERE email = $1 AND verified = FALSE ORDER BY created_at DESC LIMIT 1',
+            [email]
+        );
+        console.log('[VERIFY-CODE] DB 조회 완료:', { found: result.rows.length > 0 });
+
+        if (result.rows.length === 0) {
+            console.log('[VERIFY-CODE] ERROR: 인증번호 없음', { email });
+            return res.status(404).json({
+                success: false,
+                error: 'CODE_NOT_FOUND',
+                message: 'No verification code found for this email'
+            });
+        }
+
+        const verification = result.rows[0];
+
+        // 만료 확인
+        if (new Date() > new Date(verification.expires_at)) {
+            console.log('[VERIFY-CODE] ERROR: 인증번호 만료', { email });
+            return res.status(410).json({
+                success: false,
+                error: 'CODE_EXPIRED',
+                message: 'Verification code has expired'
+            });
+        }
+
+        // 시도 횟수 확인
+        if (verification.attempts >= 5) {
+            console.log('[VERIFY-CODE] ERROR: 시도 횟수 초과', { email, attempts: verification.attempts });
+            // 인증번호 무효화
+            await pool.query(
+                'UPDATE email_verifications SET verified = TRUE WHERE id = $1',
+                [verification.id]
+            );
+            return res.status(429).json({
+                success: false,
+                error: 'TOO_MANY_ATTEMPTS',
+                message: 'Too many failed attempts. Please request a new code.'
+            });
+        }
+
+        // 인증번호 일치 확인
+        if (verification.code !== code) {
+            console.log('[VERIFY-CODE] ERROR: 인증번호 불일치', { email, attempts: verification.attempts + 1 });
+            // 시도 횟수 증가
+            await pool.query(
+                'UPDATE email_verifications SET attempts = attempts + 1 WHERE id = $1',
+                [verification.id]
+            );
+            return res.status(401).json({
+                success: false,
+                error: 'INVALID_CODE',
+                message: 'Invalid verification code',
+                attemptsRemaining: 5 - (verification.attempts + 1)
+            });
+        }
+
+        // 인증 성공
+        console.log('[VERIFY-CODE] 인증번호 검증 성공');
+        await pool.query(
+            'UPDATE email_verifications SET verified = TRUE WHERE id = $1',
+            [verification.id]
+        );
+
+        console.log('[VERIFY-CODE] SUCCESS:', { email });
+
+        res.json({
+            success: true,
+            message: 'Email verified successfully'
+        });
+
+    } catch (error) {
+        console.error('[VERIFY-CODE] EXCEPTION:', {
+            message: error.message,
+            stack: error.stack,
+            code: error.code,
+            timestamp: new Date().toISOString()
+        });
+
+        if (error.code) {
+            return res.status(500).json({
+                success: false,
+                error: 'DATABASE_ERROR',
+                message: 'Database error',
+                code: error.code
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'INTERNAL_SERVER_ERROR',
+            message: 'Server error'
+        });
+    }
+});
+
+// 4. 회원가입
 router.post('/signup', async (req, res) => {
     try {
         console.log('[SIGNUP] 회원가입 시도:', {
@@ -176,7 +574,7 @@ router.post('/signup', async (req, res) => {
     }
 });
 
-// 로그인
+// 5. 로그인
 router.post('/login', async (req, res) => {
     try {
         console.log('[LOGIN] 로그인 시도:', { username: req.body.username, timestamp: new Date().toISOString() });
@@ -419,7 +817,7 @@ const verifyToken = (req, res, next) => {
     });
 };
 
-// 보호된 라우트 예시
+// 6. 보호된 라우트 예시
 router.get('/profile', verifyToken, async (req, res) => {
     try {
         console.log('[PROFILE] 프로필 조회 시도:', {
