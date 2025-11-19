@@ -1,9 +1,11 @@
 # MVE Login Server
 
-원티드 포텐업 [언리얼 & AI] 최종 프로젝트의 로그인 기능을 위한 프로젝트입니다.<br>
+원티드 포텐업 [언리얼 & AI] 최종 프로젝트의 **인증 전용** 서버입니다.<br>
 PostgreSQL와 이메일 인증 및 JWT 토큰을 사용하는 Node.js 인증 API 서버입니다.<br>
 Amazon Web Services EC2 Instance Ubuntu에 프로젝트를 배포하는 걸 상정합니다.<br>
 단, 로컬 시스템에서도 각종 인증 기능은 localhost를 통해서 테스트할 수 있습니다.<br>
+
+> **참고**: 이 서버는 인증(회원가입, 로그인, 토큰 발급)만 담당합니다. 게임 데이터 및 리소스는 별도의 [mve-resource-server](../mve-resource-server)에서 관리됩니다. 두 서버는 동일한 JWT_SECRET을 공유하여 토큰 검증을 수행합니다.
 
 **⚠️ 주의** : Claude Code 바이브 코딩으로 개발했으므로, 함부로 실제 서비스에 사용하다 보안 문제가 발생해도 책임지지 않습니다.
 
