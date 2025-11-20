@@ -11,6 +11,7 @@ const app = express();
 // 미들웨어
 app.use(cors());
 app.use(express.json());
+app.use(express.static('public'));
 
 // 라우트
 app.use('/api/auth', authRoutes);

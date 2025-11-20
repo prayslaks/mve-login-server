@@ -133,8 +133,11 @@ DB_NAME=logindb
 JWT_SECRET=your-strong-secret-key  # 32자 강력한 비밀 키로 변경
 
 # 이메일 인증 설정 (Naver 메일 사용 예시)
+EMAIL_HOST=smtp.naver.com
+EMAIL_PORT=587
+EMAIL_SECURE=false
 EMAIL_USER=your_email@naver.com    # 발신 이메일 주소
-EMAIL_PASSWORD=your_password       # Naver 계정 비밀번호
+EMAIL_PASSWORD=your_email_password # Naver 계정 비밀번호
 ```
 
 ### JWT 암호키 생성
@@ -156,8 +159,12 @@ openssl rand -hex 32
 Naver 메일은 앱 비밀번호 없이 일반 계정 비밀번호로 사용 가능합니다.
 
 ```env
+# 인증 번호 전송 이메일 SMTP 환경설정
+EMAIL_HOST=smtp.naver.com
+EMAIL_PORT=587
+EMAIL_SECURE=false
 EMAIL_USER=your_email@naver.com
-EMAIL_PASSWORD=your_naver_password
+EMAIL_PASSWORD=your_email_password
 ```
 
 **routes/auth.js 설정 (기본값):**

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MVE Login Server - API Tester</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { color: #333; margin-bottom: 20px; }
+        .section { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .section h2 { margin-top: 0; color: #444; border-bottom: 2px solid #4CAF50; padding-bottom: 10px; }
+        .api-group { margin-bottom: 15px; padding: 15px; background: #f9f9f9; border-radius: 4px; }
+        .api-group h3 { margin: 0 0 10px 0; font-size: 14px; color: #666; }
+        .input-group { margin-bottom: 10px; }
+        .input-group label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
+        .input-group input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 5px; margin-bottom: 5px; }
+        .btn-primary { background: #4CAF50; color: white; }
+        .btn-secondary { background: #2196F3; color: white; }
+        .btn-warning { background: #ff9800; color: white; }
+        button:hover { opacity: 0.9; }
+        .response { margin-top: 10px; padding: 10px; background: #263238; color: #aed581; border-radius: 4px; font-family: monospace; font-size: 12px; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+        .token-display { background: #fff3e0; padding: 10px; border-radius: 4px; margin-bottom: 15px; word-break: break-all; font-size: 12px; }
+        .flex { display: flex; gap: 10px; }
+        .flex > * { flex: 1; }
+        .server-config { margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MVE Login Server - API Tester</h1>
+
+        <!-- Server Configuration -->
+        <div class="section">
+            <h2>Server Configuration</h2>
+            <div class="server-config">
+                <div class="input-group">
+                    <label>Login Server URL</label>
+                    <input type="text" id="loginServerUrl" value="http://localhost:3000">
+                </div>
+            </div>
+            <div class="token-display">
+                <strong>Current JWT Token:</strong><br>
+                <span id="currentToken">No token</span>
+            </div>
+        </div>
+
+        <!-- Auth APIs -->
+        <div class="section">
+            <h2>Authentication APIs</h2>
+
+            <!-- Health Check -->
+            <div class="api-group">
+                <h3>GET /health - Health Check</h3>
+                <button class="btn-primary" onclick="testHealth()">Test Health</button>
+                <div class="response" id="healthResponse"></div>
+            </div>
+
+            <!-- Check Email -->
+            <div class="api-group">
+                <h3>POST /api/auth/check-email - Check Email Availability</h3>
+                <div class="input-group">
+                    <label>Email</label>
+                    <input type="email" id="checkEmail" placeholder="test@example.com">
+                </div>
+                <button class="btn-primary" onclick="checkEmail()">Check Email</button>
+                <div class="response" id="checkEmailResponse"></div>
+            </div>
+
+            <!-- Send Verification -->
+            <div class="api-group">
+                <h3>POST /api/auth/send-verification - Send Verification Code</h3>
+                <div class="input-group">
+                    <label>Email</label>
+                    <input type="email" id="verifyEmail" placeholder="test@example.com">
+                </div>
+                <button class="btn-warning" onclick="sendVerification()">Send Code</button>
+                <div class="response" id="sendVerificationResponse"></div>
+            </div>
+
+            <!-- Verify Code -->
+            <div class="api-group">
+                <h3>POST /api/auth/verify-code - Verify Code</h3>
+                <div class="flex">
+                    <div class="input-group">
+                        <label>Email</label>
+                        <input type="email" id="verifyCodeEmail" placeholder="test@example.com">
+                    </div>
+                    <div class="input-group">
+                        <label>Code (6 digits)</label>
+                        <input type="text" id="verifyCode" placeholder="123456">
+                    </div>
+                </div>
+                <button class="btn-primary" onclick="verifyCode()">Verify Code</button>
+                <div class="response" id="verifyCodeResponse"></div>
+            </div>
+
+            <!-- Signup -->
+            <div class="api-group">
+                <h3>POST /api/auth/signup - Sign Up</h3>
+                <div class="flex">
+                    <div class="input-group">
+                        <label>Username</label>
+                        <input type="text" id="signupUsername" placeholder="testuser">
+                    </div>
+                    <div class="input-group">
+                        <label>Email</label>
+                        <input type="email" id="signupEmail" placeholder="test@example.com">
+                    </div>
+                    <div class="input-group">
+                        <label>Password</label>
+                        <input type="password" id="signupPassword" placeholder="password123">
+                    </div>
+                </div>
+                <button class="btn-primary" onclick="signup()">Sign Up</button>
+                <div class="response" id="signupResponse"></div>
+            </div>
+
+            <!-- Login -->
+            <div class="api-group">
+                <h3>POST /api/auth/login - Login</h3>
+                <div class="flex">
+                    <div class="input-group">
+                        <label>Username</label>
+                        <input type="text" id="loginUsername" placeholder="testuser">
+                    </div>
+                    <div class="input-group">
+                        <label>Password</label>
+                        <input type="password" id="loginPassword" placeholder="password123">
+                    </div>
+                </div>
+                <button class="btn-secondary" onclick="login()">Login & Save Token</button>
+                <div class="response" id="loginResponse"></div>
+            </div>
+
+            <!-- Profile -->
+            <div class="api-group">
+                <h3>GET /api/auth/profile - Get Profile (JWT Required)</h3>
+                <button class="btn-primary" onclick="getProfile()">Get Profile</button>
+                <div class="response" id="profileResponse"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let jwtToken = localStorage.getItem('mve_jwt_token') || '';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateTokenDisplay();
+        });
+
+        function updateTokenDisplay() {
+            const display = document.getElementById('currentToken');
+            if (jwtToken) {
+                display.textContent = jwtToken.substring(0, 50) + '...';
+            } else {
+                display.textContent = 'No token';
+            }
+        }
+
+        function getServerUrl() {
+            return document.getElementById('loginServerUrl').value;
+        }
+
+        function getAuthHeaders() {
+            return jwtToken ? { 'Authorization': `Bearer ${jwtToken}` } : {};
+        }
+
+        async function apiCall(url, options = {}) {
+            const startTime = Date.now();
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders(),
+                        ...options.headers
+                    }
+                });
+                const data = await response.json();
+                const duration = Date.now() - startTime;
+                return {
+                    status: response.status,
+                    statusText: response.statusText,
+                    duration: `${duration}ms`,
+                    data
+                };
+            } catch (error) {
+                const duration = Date.now() - startTime;
+                return {
+                    status: 'ERROR',
+                    duration: `${duration}ms`,
+                    error: error.message
+                };
+            }
+        }
+
+        function displayResponse(elementId, response) {
+            document.getElementById(elementId).textContent = JSON.stringify(response, null, 2);
+        }
+
+        async function testHealth() {
+            const response = await apiCall(`${getServerUrl()}/health`);
+            displayResponse('healthResponse', response);
+        }
+
+        async function checkEmail() {
+            const email = document.getElementById('checkEmail').value;
+            const response = await apiCall(`${getServerUrl()}/api/auth/check-email`, {
+                method: 'POST',
+                body: JSON.stringify({ email })
+            });
+            displayResponse('checkEmailResponse', response);
+        }
+
+        async function sendVerification() {
+            const email = document.getElementById('verifyEmail').value;
+            const response = await apiCall(`${getServerUrl()}/api/auth/send-verification`, {
+                method: 'POST',
+                body: JSON.stringify({ email })
+            });
+            displayResponse('sendVerificationResponse', response);
+        }
+
+        async function verifyCode() {
+            const email = document.getElementById('verifyCodeEmail').value;
+            const code = document.getElementById('verifyCode').value;
+            const response = await apiCall(`${getServerUrl()}/api/auth/verify-code`, {
+                method: 'POST',
+                body: JSON.stringify({ email, code })
+            });
+            displayResponse('verifyCodeResponse', response);
+        }
+
+        async function signup() {
+            const username = document.getElementById('signupUsername').value;
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            const response = await apiCall(`${getServerUrl()}/api/auth/signup`, {
+                method: 'POST',
+                body: JSON.stringify({ username, email, password })
+            });
+            displayResponse('signupResponse', response);
+        }
+
+        async function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const response = await apiCall(`${getServerUrl()}/api/auth/login`, {
+                method: 'POST',
+                body: JSON.stringify({ username, password })
+            });
+            displayResponse('loginResponse', response);
+
+            if (response.data && response.data.token) {
+                jwtToken = response.data.token;
+                localStorage.setItem('mve_jwt_token', jwtToken);
+                updateTokenDisplay();
+            }
+        }
+
+        async function getProfile() {
+            const response = await apiCall(`${getServerUrl()}/api/auth/profile`);
+            displayResponse('profileResponse', response);
+        }
+    </script>
+</body>
+</html>

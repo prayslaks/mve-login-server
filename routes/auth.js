@@ -146,6 +146,22 @@ router.post('/send-verification', async (req, res) => {
             });
         }
 
+        // 이메일 중복 확인
+        console.log('[SEND-VERIFICATION] 이메일 중복 확인');
+        const existingUser = await pool.query(
+            'SELECT email FROM users WHERE email = $1',
+            [email]
+        );
+
+        if (existingUser.rows.length > 0) {
+            console.log('[SEND-VERIFICATION] ERROR: 이미 등록된 이메일', { email });
+            return res.status(409).json({
+                success: false,
+                error: 'EMAIL_ALREADY_EXISTS',
+                message: 'Email is already registered'
+            });
+        }
+
         // Rate limiting: 1분 이내 재전송 방지
         console.log('[SEND-VERIFICATION] Rate limiting 확인');
         const recentCheck = await pool.query(
