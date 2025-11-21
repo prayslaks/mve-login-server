@@ -117,6 +117,31 @@ psql -U postgres -d logindb -f migration_add_email_verification.sql
 - `init.sql`은 **신규 설치 전용**입니다. 기존 테이블이 있으면 건너뜁니다.
 - 프로덕션 환경에서 기능을 추가할 때는 **마이그레이션 스크립트**를 사용하세요.
 
+### 4. 새로운 SSH 키 추가 (오리지널 키가 없는 다른 PC에서 EC2 접속을 원하는 경우)
+
+새 PC에서 AWS EC2 인스턴스에 접속하려면 SSH 키를 생성하고 등록해야 합니다.
+
+**Windows PowerShell:**
+```powershell
+# ~/.ssh/ 폴더가 없으면 생성
+mkdir $HOME\.ssh
+
+# 키 생성
+ssh-keygen -t rsa -b 4096 -f $HOME\.ssh\aws_key
+```
+
+**기존 PC에서 EC2에 공개키 등록:**
+```bash
+# 새 PC의 공개키 내용 (~/.ssh/aws_key.pub)을 복사 후
+echo "복사한_공개키_내용" >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+**새 PC에서 접속:**
+```powershell
+ssh -i $HOME\.ssh\aws_key ubuntu@<EC2_PUBLIC_IP>
+```
+
 ---
 
 ## 환경 설정
