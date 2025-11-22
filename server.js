@@ -24,7 +24,9 @@ app.get('/health', (req, res) => {
 // HTTP 서버 (개발용)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`MVE Login Server running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`DB: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
 });
 
 // HTTPS 서버 (프로덕션용)

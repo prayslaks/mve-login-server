@@ -272,7 +272,108 @@
 
 ---
 
-## 6. 프로필 조회 (GET /api/auth/profile)
+## 6. 로그아웃 (POST /api/auth/logout)
+
+### 요청
+```
+POST /api/auth/logout
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### 성공 응답 (200 OK)
+```json
+{
+  "success": true,
+  "message": "Logout successful. Please delete the token on client side."
+}
+```
+
+### 오류 응답
+
+#### 403 Forbidden
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `NO_AUTH_HEADER` | Authorization 헤더 없음 | `{ "success": false, "error": "NO_AUTH_HEADER", "message": "No authorization header provided" }` |
+| `INVALID_AUTH_FORMAT` | Bearer 형식이 아님 | `{ "success": false, "error": "INVALID_AUTH_FORMAT", "message": "Authorization header must start with \"Bearer \"" }` |
+| `NO_TOKEN` | 토큰 없음 | `{ "success": false, "error": "NO_TOKEN", "message": "No token provided" }` |
+
+#### 401 Unauthorized
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `TOKEN_EXPIRED` | 토큰 만료 | `{ "success": false, "error": "TOKEN_EXPIRED", "message": "Token has expired", "expiredAt": "2024-01-01T02:00:00.000Z" }` |
+| `INVALID_TOKEN` | 잘못된 토큰 | `{ "success": false, "error": "INVALID_TOKEN", "message": "Invalid token" }` |
+
+#### 500 Internal Server Error
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `INTERNAL_SERVER_ERROR` | 기타 서버 오류 | `{ "success": false, "error": "INTERNAL_SERVER_ERROR", "message": "Server error" }` |
+
+---
+
+## 7. 회원 탈퇴 (DELETE /api/auth/withdraw)
+
+### 요청
+```
+DELETE /api/auth/withdraw
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+
+{
+  "password": "current_password"
+}
+```
+
+### 성공 응답 (200 OK)
+```json
+{
+  "success": true,
+  "message": "Account deleted successfully"
+}
+```
+
+### 오류 응답
+
+#### 400 Bad Request
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `MISSING_PASSWORD` | 비밀번호 필드 누락 | `{ "success": false, "error": "MISSING_PASSWORD", "message": "Password is required for account deletion" }` |
+
+#### 401 Unauthorized
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `INVALID_PASSWORD` | 비밀번호 불일치 | `{ "success": false, "error": "INVALID_PASSWORD", "message": "Invalid password" }` |
+| `TOKEN_EXPIRED` | 토큰 만료 | `{ "success": false, "error": "TOKEN_EXPIRED", "message": "Token has expired" }` |
+| `INVALID_TOKEN` | 잘못된 토큰 | `{ "success": false, "error": "INVALID_TOKEN", "message": "Invalid token" }` |
+
+#### 403 Forbidden
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `NO_AUTH_HEADER` | Authorization 헤더 없음 | `{ "success": false, "error": "NO_AUTH_HEADER", "message": "No authorization header provided" }` |
+| `INVALID_AUTH_FORMAT` | Bearer 형식이 아님 | `{ "success": false, "error": "INVALID_AUTH_FORMAT", "message": "Authorization header must start with \"Bearer \"" }` |
+| `NO_TOKEN` | 토큰 없음 | `{ "success": false, "error": "NO_TOKEN", "message": "No token provided" }` |
+
+#### 404 Not Found
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `USER_NOT_FOUND` | 사용자 없음 | `{ "success": false, "error": "USER_NOT_FOUND", "message": "User not found" }` |
+
+#### 500 Internal Server Error
+
+| 오류 코드 | 설명 | 응답 예시 |
+|---------|------|----------|
+| `DATABASE_ERROR` | 데이터베이스 오류 | `{ "success": false, "error": "DATABASE_ERROR", "message": "Database error", "code": "..." }` |
+| `INTERNAL_SERVER_ERROR` | 기타 서버 오류 | `{ "success": false, "error": "INTERNAL_SERVER_ERROR", "message": "Server error" }` |
+
+---
+
+## 8. 프로필 조회 (GET /api/auth/profile)
 
 ### 요청
 ```

@@ -737,7 +737,146 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// 6. 보호된 라우트 예시
+// 6. 로그아웃
+router.post('/logout', verifyToken, async (req, res) => {
+    try {
+        console.log('[LOGOUT] 로그아웃 시도:', {
+            userId: req.userId,
+            username: req.username,
+            timestamp: new Date().toISOString()
+        });
+
+        // JWT는 stateless이므로 서버에서 직접 무효화할 수 없음
+        // 클라이언트에서 토큰을 삭제하도록 안내
+        // 필요시 토큰 블랙리스트를 구현할 수 있음
+
+        console.log('[LOGOUT] SUCCESS: 로그아웃 성공', {
+            userId: req.userId,
+            username: req.username
+        });
+
+        res.json({
+            success: true,
+            message: 'Logout successful. Please delete the token on client side.'
+        });
+
+    } catch (error) {
+        console.error('[LOGOUT] EXCEPTION:', {
+            message: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString()
+        });
+
+        res.status(500).json({
+            success: false,
+            error: 'INTERNAL_SERVER_ERROR',
+            message: 'Server error'
+        });
+    }
+});
+
+// 7. 회원 탈퇴
+router.delete('/withdraw', verifyToken, async (req, res) => {
+    try {
+        console.log('[WITHDRAW] 회원 탈퇴 시도:', {
+            userId: req.userId,
+            username: req.username,
+            timestamp: new Date().toISOString()
+        });
+
+        const { password } = req.body;
+
+        // 비밀번호 확인 필수
+        if (!password) {
+            console.log('[WITHDRAW] ERROR: 비밀번호 누락');
+            return res.status(400).json({
+                success: false,
+                error: 'MISSING_PASSWORD',
+                message: 'Password is required for account deletion'
+            });
+        }
+
+        // 사용자 조회
+        console.log('[WITHDRAW] 사용자 조회:', { userId: req.userId });
+        const userResult = await pool.query(
+            'SELECT * FROM users WHERE id = $1',
+            [req.userId]
+        );
+
+        if (userResult.rows.length === 0) {
+            console.log('[WITHDRAW] ERROR: 사용자 없음', { userId: req.userId });
+            return res.status(404).json({
+                success: false,
+                error: 'USER_NOT_FOUND',
+                message: 'User not found'
+            });
+        }
+
+        const user = userResult.rows[0];
+
+        // 비밀번호 검증
+        console.log('[WITHDRAW] 비밀번호 검증');
+        const validPassword = await bcrypt.compare(password, user.password);
+
+        if (!validPassword) {
+            console.log('[WITHDRAW] ERROR: 비밀번호 불일치', { userId: req.userId });
+            return res.status(401).json({
+                success: false,
+                error: 'INVALID_PASSWORD',
+                message: 'Invalid password'
+            });
+        }
+
+        // 관련 데이터 삭제 (이메일 인증 기록)
+        console.log('[WITHDRAW] 관련 데이터 삭제');
+        await pool.query(
+            'DELETE FROM email_verifications WHERE email = $1',
+            [user.email]
+        );
+
+        // 사용자 삭제
+        console.log('[WITHDRAW] 사용자 삭제:', { userId: req.userId });
+        await pool.query(
+            'DELETE FROM users WHERE id = $1',
+            [req.userId]
+        );
+
+        console.log('[WITHDRAW] SUCCESS: 회원 탈퇴 성공', {
+            userId: req.userId,
+            username: req.username
+        });
+
+        res.json({
+            success: true,
+            message: 'Account deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('[WITHDRAW] EXCEPTION:', {
+            message: error.message,
+            stack: error.stack,
+            code: error.code,
+            timestamp: new Date().toISOString()
+        });
+
+        if (error.code) {
+            return res.status(500).json({
+                success: false,
+                error: 'DATABASE_ERROR',
+                message: 'Database error',
+                code: error.code
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'INTERNAL_SERVER_ERROR',
+            message: 'Server error'
+        });
+    }
+});
+
+// 8. 보호된 라우트 예시
 router.get('/profile', verifyToken, async (req, res) => {
     try {
         console.log('[PROFILE] 프로필 조회 시도:', {

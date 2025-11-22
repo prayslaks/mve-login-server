@@ -11,6 +11,8 @@
   - [인증번호 검증](#인증번호-검증)
   - [회원가입](#회원가입)
   - [로그인](#로그인)
+  - [로그아웃](#로그아웃)
+  - [회원 탈퇴](#회원-탈퇴)
   - [프로필 조회](#프로필-조회)
 - [curl 테스트](#curl-테스트)
 - [전체 시나리오 테스트](#전체-시나리오-테스트)
@@ -311,6 +313,82 @@ try {
 
 ---
 
+### 로그아웃
+
+```powershell
+# 먼저 로그인해서 토큰 받기
+$token = $loginResult.token
+
+$headers = @{
+    "Authorization" = "Bearer $token"
+}
+
+try {
+    $result = Invoke-RestMethod -Uri "http://localhost:3000/api/auth/logout" `
+        -Method POST `
+        -Headers $headers
+
+    if ($result.success) {
+        Write-Host "로그아웃 성공!" -ForegroundColor Green
+        Write-Host $result.message
+        # 클라이언트에서 토큰 삭제
+        $token = $null
+    }
+} catch {
+    $statusCode = $_.Exception.Response.StatusCode.value__
+    Write-Host "Status Code: $statusCode" -ForegroundColor Red
+
+    if ($_.ErrorDetails.Message) {
+        $errorBody = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Host "Error: $($errorBody.error)" -ForegroundColor Red
+        Write-Host "Message: $($errorBody.message)"
+    }
+}
+```
+
+---
+
+### 회원 탈퇴
+
+```powershell
+# 먼저 로그인해서 토큰 받기
+$token = $loginResult.token
+
+$headers = @{
+    "Authorization" = "Bearer $token"
+}
+
+$body = @{
+    password = "current_password"
+} | ConvertTo-Json
+
+try {
+    $result = Invoke-RestMethod -Uri "http://localhost:3000/api/auth/withdraw" `
+        -Method DELETE `
+        -Headers $headers `
+        -ContentType "application/json" `
+        -Body $body
+
+    if ($result.success) {
+        Write-Host "회원 탈퇴 성공!" -ForegroundColor Green
+        Write-Host $result.message
+        # 토큰 삭제
+        $token = $null
+    }
+} catch {
+    $statusCode = $_.Exception.Response.StatusCode.value__
+    Write-Host "Status Code: $statusCode" -ForegroundColor Red
+
+    if ($_.ErrorDetails.Message) {
+        $errorBody = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Host "Error: $($errorBody.error)" -ForegroundColor Red
+        Write-Host "Message: $($errorBody.message)"
+    }
+}
+```
+
+---
+
 ### 프로필 조회
 
 #### Authorization 헤더 설정
@@ -451,6 +529,28 @@ TOKEN="your_jwt_token_here"
 
 curl -X GET http://localhost:3000/api/auth/profile \
   -H "Authorization: Bearer $TOKEN"
+```
+
+### 로그아웃
+
+```bash
+TOKEN="your_jwt_token_here"
+
+curl -X POST http://localhost:3000/api/auth/logout \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 회원 탈퇴
+
+```bash
+TOKEN="your_jwt_token_here"
+
+curl -X DELETE http://localhost:3000/api/auth/withdraw \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "password": "current_password"
+  }'
 ```
 
 ---
