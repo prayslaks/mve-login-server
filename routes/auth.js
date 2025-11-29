@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const pool = require('../db');
+const redisClient = require('../redis-client');
 const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -162,47 +163,40 @@ router.post('/send-verification', async (req, res) => {
             });
         }
 
-        // Rate limiting: 1분 이내 재전송 방지
+        // Rate limiting: 1분 이내 재전송 방지 (Redis 사용)
         console.log('[SEND-VERIFICATION] Rate limiting 확인');
-        const recentCheck = await pool.query(
-            'SELECT * FROM email_verifications WHERE email = $1 AND created_at > NOW() - INTERVAL \'1 minute\' ORDER BY created_at DESC LIMIT 1',
-            [email]
-        );
+        const rateLimitKey = `email:ratelimit:${email}`;
+        const rateLimitExists = await redisClient.exists(rateLimitKey);
 
-        if (recentCheck.rows.length > 0) {
+        if (rateLimitExists) {
             console.log('[SEND-VERIFICATION] ERROR: 재전송 제한', { email });
-            const timeDiff = Math.ceil((60000 - (Date.now() - new Date(recentCheck.rows[0].created_at).getTime())) / 1000);
+            const ttl = await redisClient.ttl(rateLimitKey);
             return res.status(429).json({
                 success: false,
                 error: 'TOO_MANY_REQUESTS',
                 message: 'Please wait before requesting another code',
-                retryAfter: timeDiff
+                retryAfter: ttl > 0 ? ttl : 60
             });
         }
-
-        // 만료된 인증번호 삭제
-        console.log('[SEND-VERIFICATION] 만료된 인증번호 삭제');
-        await pool.query('SELECT delete_expired_verifications()');
-
-        // 기존 미검증 인증번호 무효화 (verified = true로 표시하여 재사용 방지)
-        console.log('[SEND-VERIFICATION] 기존 인증번호 무효화');
-        await pool.query(
-            'UPDATE email_verifications SET verified = TRUE WHERE email = $1 AND verified = FALSE',
-            [email]
-        );
 
         // 6자리 인증번호 생성
         const code = generateVerificationCode();
         console.log('[SEND-VERIFICATION] 인증번호 생성 완료');
 
-        // DB에 저장 (5분 유효)
-        const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-        console.log('[SEND-VERIFICATION] DB 저장 시작');
-        await pool.query(
-            'INSERT INTO email_verifications (email, code, expires_at) VALUES ($1, $2, $3)',
-            [email, code, expiresAt]
-        );
-        console.log('[SEND-VERIFICATION] DB 저장 완료');
+        // Redis에 저장 (5분 TTL, 자동 만료)
+        const verificationKey = `email:verification:${email}`;
+        const verificationData = JSON.stringify({
+            code: code,
+            attempts: 0,
+            createdAt: Date.now()
+        });
+
+        console.log('[SEND-VERIFICATION] Redis 저장 시작');
+        await redisClient.setEx(verificationKey, 300, verificationData); // 5분 = 300초
+
+        // Rate limit 키 설정 (1분 TTL)
+        await redisClient.setEx(rateLimitKey, 60, Date.now().toString());
+        console.log('[SEND-VERIFICATION] Redis 저장 완료');
 
         // 이메일 전송
         console.log('[SEND-VERIFICATION] 이메일 전송 시작');
@@ -317,47 +311,28 @@ router.post('/verify-code', async (req, res) => {
             });
         }
 
-        // 만료된 인증번호 삭제
-        console.log('[VERIFY-CODE] 만료된 인증번호 삭제');
-        await pool.query('SELECT delete_expired_verifications()');
+        // Redis에서 인증번호 조회
+        console.log('[VERIFY-CODE] Redis 조회 시작:', { email });
+        const verificationKey = `email:verification:${email}`;
+        const verificationData = await redisClient.get(verificationKey);
 
-        // DB에서 인증번호 조회
-        console.log('[VERIFY-CODE] DB 조회 시작:', { email });
-        const result = await pool.query(
-            'SELECT * FROM email_verifications WHERE email = $1 AND verified = FALSE ORDER BY created_at DESC LIMIT 1',
-            [email]
-        );
-        console.log('[VERIFY-CODE] DB 조회 완료:', { found: result.rows.length > 0 });
-
-        if (result.rows.length === 0) {
-            console.log('[VERIFY-CODE] ERROR: 인증번호 없음', { email });
+        if (!verificationData) {
+            console.log('[VERIFY-CODE] ERROR: 인증번호 없음 또는 만료됨', { email });
             return res.status(404).json({
                 success: false,
                 error: 'CODE_NOT_FOUND',
-                message: 'No verification code found for this email'
+                message: 'No verification code found or expired'
             });
         }
 
-        const verification = result.rows[0];
-
-        // 만료 확인
-        if (new Date() > new Date(verification.expires_at)) {
-            console.log('[VERIFY-CODE] ERROR: 인증번호 만료', { email });
-            return res.status(410).json({
-                success: false,
-                error: 'CODE_EXPIRED',
-                message: 'Verification code has expired'
-            });
-        }
+        const verification = JSON.parse(verificationData);
+        console.log('[VERIFY-CODE] Redis 조회 완료:', { found: true, attempts: verification.attempts });
 
         // 시도 횟수 확인
         if (verification.attempts >= 5) {
             console.log('[VERIFY-CODE] ERROR: 시도 횟수 초과', { email, attempts: verification.attempts });
-            // 인증번호 무효화
-            await pool.query(
-                'UPDATE email_verifications SET verified = TRUE WHERE id = $1',
-                [verification.id]
-            );
+            // 인증번호 무효화 (Redis에서 삭제)
+            await redisClient.del(verificationKey);
             return res.status(429).json({
                 success: false,
                 error: 'TOO_MANY_ATTEMPTS',
@@ -368,25 +343,23 @@ router.post('/verify-code', async (req, res) => {
         // 인증번호 일치 확인
         if (verification.code !== code) {
             console.log('[VERIFY-CODE] ERROR: 인증번호 불일치', { email, attempts: verification.attempts + 1 });
-            // 시도 횟수 증가
-            await pool.query(
-                'UPDATE email_verifications SET attempts = attempts + 1 WHERE id = $1',
-                [verification.id]
-            );
+
+            // 시도 횟수 증가 (TTL 유지)
+            verification.attempts += 1;
+            const ttl = await redisClient.ttl(verificationKey);
+            await redisClient.setEx(verificationKey, ttl > 0 ? ttl : 300, JSON.stringify(verification));
+
             return res.status(401).json({
                 success: false,
                 error: 'INVALID_CODE',
                 message: 'Invalid verification code',
-                attemptsRemaining: 5 - (verification.attempts + 1)
+                attemptsRemaining: 5 - verification.attempts
             });
         }
 
-        // 인증 성공
+        // 인증 성공 - Redis에서 삭제 (일회용)
         console.log('[VERIFY-CODE] 인증번호 검증 성공');
-        await pool.query(
-            'UPDATE email_verifications SET verified = TRUE WHERE id = $1',
-            [verification.id]
-        );
+        await redisClient.del(verificationKey);
 
         console.log('[VERIFY-CODE] SUCCESS:', { email });
 
@@ -827,12 +800,11 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
             });
         }
 
-        // 관련 데이터 삭제 (이메일 인증 기록)
+        // 관련 데이터 삭제 (Redis의 이메일 인증 기록)
         console.log('[WITHDRAW] 관련 데이터 삭제');
-        await pool.query(
-            'DELETE FROM email_verifications WHERE email = $1',
-            [user.email]
-        );
+        const verificationKey = `email:verification:${user.email}`;
+        const rateLimitKey = `email:ratelimit:${user.email}`;
+        await redisClient.del([verificationKey, rateLimitKey]);
 
         // 사용자 삭제
         console.log('[WITHDRAW] 사용자 삭제:', { userId: req.userId });

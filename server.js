@@ -5,6 +5,7 @@ const fs = require('fs');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
+const redisClient = require('./redis-client');
 
 const app = express();
 
@@ -17,8 +18,23 @@ app.use(express.static('public'));
 app.use('/api/auth', authRoutes);
 
 // 헬스 체크
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok' });
+app.get('/health', async (req, res) => {
+    try {
+        const redisPing = await redisClient.ping();
+        res.json({
+            status: 'ok',
+            server: 'mve-login-server',
+            redis: redisPing === 'PONG' ? 'connected' : 'disconnected',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.json({
+            status: 'ok',
+            server: 'mve-login-server',
+            redis: 'disconnected',
+            timestamp: new Date().toISOString()
+        });
+    }
 });
 
 // HTTP 서버 (개발용)
@@ -27,6 +43,7 @@ app.listen(PORT, () => {
     console.log(`MVE Login Server running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`DB: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
+    console.log(`Redis: ${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || 6379}`);
 });
 
 // HTTPS 서버 (프로덕션용)
