@@ -4,8 +4,9 @@ const https = require('https');
 const fs = require('fs');
 require('dotenv').config();
 
-const authRoutes = require('./routes/auth');
+// 서버 내 라우트 경로
 const redisClient = require('./redis-client');
+const authRoutes = require('./routes/auth');
 
 const app = express();
 
@@ -18,7 +19,7 @@ app.use(express.static('public'));
 app.use('/api/auth', authRoutes);
 
 // 헬스 체크
-app.get('/health', async (req, res) => {
+app.get('/health/login', async (req, res) => {
     try {
         const redisPing = await redisClient.ping();
         res.json({

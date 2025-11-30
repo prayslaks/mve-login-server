@@ -4,12 +4,7 @@ const redis = require('redis');
 const redisClient = redis.createClient({
   socket: {
     host: process.env.REDIS_HOST || 'localhost',
-    port: process.env.REDIS_PORT || 6379
-  },
-  // 비밀번호가 필요한 경우
-  password: process.env.REDIS_PASSWORD || undefined,
-  // 연결 타임아웃 설정
-  socket: {
+    port: process.env.REDIS_PORT || 6379,
     connectTimeout: 5000,
     reconnectStrategy: (retries) => {
       // 최대 10번 재시도, 지수 백오프
@@ -21,7 +16,10 @@ const redisClient = redis.createClient({
       console.log(`[REDIS] Reconnecting in ${delay}ms... (attempt ${retries})`);
       return delay;
     }
-  }
+  },
+
+  // 비밀번호가 필요한 경우
+  password: process.env.REDIS_PASSWORD || undefined
 });
 
 // 연결 이벤트 리스너
