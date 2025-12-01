@@ -25,12 +25,12 @@
 
 ```powershell
 # 방법 1: Invoke-RestMethod (권장)
-Invoke-RestMethod -Uri "http://localhost:3000/health"
+Invoke-RestMethod -Uri "http://localhost:3000/health/login"
 ```
 
 ```powershell
 # 방법 2: Invoke-WebRequest (상세 정보 필요 시)
-$response = Invoke-WebRequest -Uri "http://localhost:3000/health"
+$response = Invoke-WebRequest -Uri "http://localhost:3000/health/login"
 $response.Content | ConvertFrom-Json
 $response.StatusCode
 ```
@@ -464,7 +464,7 @@ try {
 ### 헬스 체크
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3000/health/login
 ```
 
 ### 이메일 중복 확인
@@ -568,8 +568,9 @@ Write-Host "=== MVE Login Server 통합 테스트 ===" -ForegroundColor Cyan
 # 1. 헬스 체크
 Write-Host "`n[1] 헬스 체크..." -ForegroundColor Yellow
 try {
-    $health = Invoke-RestMethod -Uri "$baseUrl/health"
+    $health = Invoke-RestMethod -Uri "$baseUrl/health/login"
     Write-Host "✓ 서버 정상 작동: $($health.status)" -ForegroundColor Green
+    Write-Host "  Redis: $($health.redis)" -ForegroundColor Gray
 } catch {
     Write-Host "✗ 서버 연결 실패" -ForegroundColor Red
     exit
