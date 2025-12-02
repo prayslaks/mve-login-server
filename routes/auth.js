@@ -77,8 +77,9 @@ router.post('/check-email', async (req, res) => {
         console.log('[CHECK-EMAIL] SUCCESS:', { email, exists });
 
         res.json({
-            success: true,
+            success: !exists,
             exists: exists,
+            error: exists ? 'EMAIL_ALREADY_EXISTS' : null,
             message: exists ? 'Email already in use' : 'Email is available'
         });
 

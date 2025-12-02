@@ -51,10 +51,12 @@ try {
         -Body $body
 
     if ($result.success) {
-        if ($result.exists) {
+        Write-Host "사용 가능한 이메일입니다." -ForegroundColor Green
+    } else {
+        if ($result.error -eq "EMAIL_ALREADY_EXISTS") {
             Write-Host "이메일이 이미 사용 중입니다." -ForegroundColor Yellow
         } else {
-            Write-Host "사용 가능한 이메일입니다." -ForegroundColor Green
+            Write-Host "확인 실패: $($result.message)" -ForegroundColor Red
         }
     }
 } catch {
@@ -589,8 +591,10 @@ try {
         -ContentType "application/json" `
         -Body $checkEmailBody
 
-    if ($emailCheck.success -and -not $emailCheck.exists) {
+    if ($emailCheck.success) {
         Write-Host "✓ 사용 가능한 이메일: $testEmail" -ForegroundColor Green
+    } else {
+        Write-Host "✗ 이메일 사용 불가: $($emailCheck.error)" -ForegroundColor Yellow
     }
 } catch {
     Write-Host "✗ 이메일 확인 실패" -ForegroundColor Red

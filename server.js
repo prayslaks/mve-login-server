@@ -23,16 +23,16 @@ app.get('/health/login', async (req, res) => {
     try {
         const redisPing = await redisClient.ping();
         res.json({
-            status: 'ok',
+            success: true,
             server: 'mve-login-server',
             redis: redisPing === 'PONG' ? 'connected' : 'disconnected',
             timestamp: new Date().toISOString()
         });
     } catch (error) {
         res.json({
-            status: 'ok',
-            server: 'mve-login-server',
-            redis: 'disconnected',
+            success: false,
+            error: 'SERVER_PROBLEM',
+            message: 'There is some error in Server.',
             timestamp: new Date().toISOString()
         });
     }

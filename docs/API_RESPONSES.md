@@ -34,12 +34,25 @@
 }
 ```
 
-### 성공 응답 (200 OK)
+### 응답 (200 OK)
+
+**이메일이 사용 가능한 경우:**
 ```json
 {
   "success": true,
   "exists": false,
+  "error": null,
   "message": "Email is available"
+}
+```
+
+**이메일이 이미 사용 중인 경우:**
+```json
+{
+  "success": false,
+  "exists": true,
+  "error": "EMAIL_ALREADY_EXISTS",
+  "message": "Email already in use"
 }
 ```
 
