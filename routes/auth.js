@@ -357,9 +357,8 @@ router.post('/verify-code', async (req, res) => {
             });
         }
 
-        // 인증 성공 - Redis에서 삭제 (일회용)
-        console.log('[VERIFY-CODE] 인증번호 검증 성공');
-        await redisClient.del(verificationKey);
+        // 인증 성공 - Redis는 유지 (회원가입 시 사용)
+        console.log('[VERIFY-CODE] 인증번호 검증 성공 (Redis 유지)');
 
         console.log('[VERIFY-CODE] SUCCESS:', { email });
 
@@ -397,38 +396,37 @@ router.post('/verify-code', async (req, res) => {
 router.post('/signup', async (req, res) => {
     try {
         console.log('[SIGNUP] 회원가입 시도:', {
-            username: req.body.username,
             email: req.body.email,
             timestamp: new Date().toISOString()
         });
 
-        const { username, password, email } = req.body;
+        const { password, email, code } = req.body;
 
         // 1. 입력값 유효성 검사
-        if (!username || !password || !email) {
+        if (!password || !email || !code) {
             console.log('[SIGNUP] ERROR: 필수 필드 누락', {
-                username: !!username,
                 password: !!password,
-                email: !!email
+                email: !!email,
+                code: !!code
             });
             return res.status(400).json({
                 success: false,
                 error: 'MISSING_FIELDS',
                 message: 'All fields required',
                 details: {
-                    username: !username ? 'Username is required' : 'OK',
                     password: !password ? 'Password is required' : 'OK',
-                    email: !email ? 'Email is required' : 'OK'
+                    email: !email ? 'Email is required' : 'OK',
+                    code: !code ? 'Verification code is required' : 'OK'
                 }
             });
         }
 
         // 입력값 타입 검증
-        if (typeof username !== 'string' || typeof password !== 'string' || typeof email !== 'string') {
+        if (typeof password !== 'string' || typeof email !== 'string' || typeof code !== 'string') {
             console.log('[SIGNUP] ERROR: 잘못된 입력 타입', {
-                usernameType: typeof username,
                 passwordType: typeof password,
-                emailType: typeof email
+                emailType: typeof email,
+                codeType: typeof code
             });
             return res.status(400).json({
                 success: false,
@@ -448,6 +446,16 @@ router.post('/signup', async (req, res) => {
             });
         }
 
+        // 인증번호 형식 검증 (6자리 숫자)
+        if (!/^\d{6}$/.test(code)) {
+            console.log('[SIGNUP] ERROR: 잘못된 인증번호 형식', { code });
+            return res.status(400).json({
+                success: false,
+                error: 'INVALID_CODE_FORMAT',
+                message: 'Code must be 6 digits'
+            });
+        }
+
         // 비밀번호 길이 검증
         if (password.length < 6) {
             console.log('[SIGNUP] ERROR: 비밀번호 길이 부족', { length: password.length });
@@ -458,58 +466,71 @@ router.post('/signup', async (req, res) => {
             });
         }
 
-        // 사용자명 길이 검증
-        if (username.length < 3 || username.length > 20) {
-            console.log('[SIGNUP] ERROR: 사용자명 길이 오류', { length: username.length });
-            return res.status(400).json({
+        // 2. 이메일 인증번호 확인
+        console.log('[SIGNUP] 이메일 인증번호 확인 시작:', { email });
+        const verificationKey = `email:verification:${email}`;
+        const verificationData = await redisClient.get(verificationKey);
+
+        if (!verificationData) {
+            console.log('[SIGNUP] ERROR: 인증번호 없음 또는 만료됨', { email });
+            return res.status(404).json({
                 success: false,
-                error: 'INVALID_USERNAME_LENGTH',
-                message: 'Username must be between 3 and 20 characters'
+                error: 'CODE_NOT_FOUND',
+                message: 'No verification code found or expired. Please request a new code.'
             });
         }
 
-        // 2. 중복 확인
-        console.log('[SIGNUP] 중복 확인 시작:', { username, email });
+        const verification = JSON.parse(verificationData);
+
+        // 인증번호 일치 확인
+        if (verification.code !== code) {
+            console.log('[SIGNUP] ERROR: 인증번호 불일치', { email });
+            return res.status(401).json({
+                success: false,
+                error: 'INVALID_CODE',
+                message: 'Invalid verification code'
+            });
+        }
+
+        console.log('[SIGNUP] 이메일 인증 확인 완료:', { email });
+
+        // 3. 중복 확인
+        console.log('[SIGNUP] 중복 확인 시작:', { email });
         const userCheck = await pool.query(
-            'SELECT username, email FROM users WHERE username = $1 OR email = $2',
-            [username, email]
+            'SELECT email FROM users WHERE email = $1',
+            [email]
         );
         console.log('[SIGNUP] 중복 확인 완료:', { found: userCheck.rows.length });
 
         if (userCheck.rows.length > 0) {
-            const existingUser = userCheck.rows[0];
-            const duplicateField = existingUser.username === username ? 'username' : 'email';
-            console.log('[SIGNUP] ERROR: 중복된 사용자', {
-                duplicateField,
-                value: duplicateField === 'username' ? username : email
-            });
+            console.log('[SIGNUP] ERROR: 중복된 이메일', { email });
             return res.status(409).json({
                 success: false,
                 error: 'USER_ALREADY_EXISTS',
-                message: 'User already exists',
-                details: {
-                    field: duplicateField,
-                    message: `${duplicateField === 'username' ? 'Username' : 'Email'} already in use`
-                }
+                message: 'Email already in use'
             });
         }
 
-        // 3. 비밀번호 해싱
+        // 4. 비밀번호 해싱
         console.log('[SIGNUP] 비밀번호 해싱 시작');
         const hashedPassword = await bcrypt.hash(password, 10);
         console.log('[SIGNUP] 비밀번호 해싱 완료');
 
-        // 4. DB 저장
+        // 5. DB 저장
         console.log('[SIGNUP] DB 저장 시작');
         const result = await pool.query(
-            'INSERT INTO users (username, password, email) VALUES ($1, $2, $3) RETURNING id, username, email',
-            [username, hashedPassword, email]
+            'INSERT INTO users (password, email) VALUES ($1, $2) RETURNING id, email',
+            [hashedPassword, email]
         );
         console.log('[SIGNUP] DB 저장 완료:', { userId: result.rows[0].id });
 
+        // 6. 인증번호 Redis에서 삭제 (회원가입 완료)
+        await redisClient.del(verificationKey);
+        console.log('[SIGNUP] 인증번호 Redis 삭제 완료:', { email });
+
         console.log('[SIGNUP] SUCCESS: 회원가입 성공', {
             userId: result.rows[0].id,
-            username: result.rows[0].username
+            email: result.rows[0].email
         });
 
         res.status(201).json({
@@ -534,7 +555,7 @@ router.post('/signup', async (req, res) => {
                 return res.status(409).json({
                     success: false,
                     error: 'DUPLICATE_ENTRY',
-                    message: 'Username or email already exists',
+                    message: 'Email already exists',
                     code: error.code
                 });
             }
@@ -567,47 +588,47 @@ router.post('/signup', async (req, res) => {
 // 5. 로그인
 router.post('/login', async (req, res) => {
     try {
-        console.log('[LOGIN] 로그인 시도:', { username: req.body.username, timestamp: new Date().toISOString() });
+        console.log('[LOGIN] 로그인 시도:', { email: req.body.email, timestamp: new Date().toISOString() });
 
-        const { username, password } = req.body;
+        const { email, password } = req.body;
 
         // 1. 입력값 유효성 검사
-        if (!username || !password) {
-            console.log('[LOGIN] ERROR: 필수 필드 누락', { username: !!username, password: !!password });
+        if (!email || !password) {
+            console.log('[LOGIN] ERROR: 필수 필드 누락', { email: !!email, password: !!password });
             return res.status(400).json({
                 success: false,
                 error: 'MISSING_FIELDS',
-                message: 'Username and password required',
+                message: 'Email and password required',
                 details: {
-                    username: !username ? 'Username is required' : 'OK',
+                    email: !email ? 'Email is required' : 'OK',
                     password: !password ? 'Password is required' : 'OK'
                 }
             });
         }
 
         // 입력값 타입 검증
-        if (typeof username !== 'string' || typeof password !== 'string') {
+        if (typeof email !== 'string' || typeof password !== 'string') {
             console.log('[LOGIN] ERROR: 잘못된 입력 타입', {
-                usernameType: typeof username,
+                emailType: typeof email,
                 passwordType: typeof password
             });
             return res.status(400).json({
                 success: false,
                 error: 'INVALID_INPUT_TYPE',
-                message: 'Username and password must be strings'
+                message: 'Email and password must be strings'
             });
         }
 
         // 2. 사용자 조회
-        console.log('[LOGIN] DB 조회 시작:', { username });
+        console.log('[LOGIN] DB 조회 시작:', { email });
         const result = await pool.query(
-            'SELECT * FROM users WHERE username = $1',
-            [username]
+            'SELECT * FROM users WHERE email = $1',
+            [email]
         );
         console.log('[LOGIN] DB 조회 완료:', { found: result.rows.length > 0 });
 
         if (result.rows.length === 0) {
-            console.log('[LOGIN] ERROR: 사용자 없음', { username });
+            console.log('[LOGIN] ERROR: 사용자 없음', { email });
             return res.status(401).json({
                 success: false,
                 error: 'USER_NOT_FOUND',
@@ -623,7 +644,7 @@ router.post('/login', async (req, res) => {
         console.log('[LOGIN] 비밀번호 검증 완료:', { valid: validPassword });
 
         if (!validPassword) {
-            console.log('[LOGIN] ERROR: 비밀번호 불일치', { username });
+            console.log('[LOGIN] ERROR: 비밀번호 불일치', { email });
             return res.status(401).json({
                 success: false,
                 error: 'INVALID_PASSWORD',
@@ -644,7 +665,7 @@ router.post('/login', async (req, res) => {
         // 5. JWT 토큰 생성
         console.log('[LOGIN] JWT 토큰 생성 시작');
         const token = jwt.sign(
-            { userId: user.id, username: user.username },
+            { userId: user.id, email: user.email },
             process.env.JWT_SECRET,
             { expiresIn: '2h' }
         );
@@ -652,7 +673,7 @@ router.post('/login', async (req, res) => {
 
         console.log('[LOGIN] SUCCESS: 로그인 성공', {
             userId: user.id,
-            username: user.username
+            email: user.email
         });
 
         res.json({
@@ -661,7 +682,6 @@ router.post('/login', async (req, res) => {
             token: token,
             user: {
                 id: user.id,
-                username: user.username,
                 email: user.email
             }
         });
@@ -715,7 +735,7 @@ router.post('/logout', verifyToken, async (req, res) => {
     try {
         console.log('[LOGOUT] 로그아웃 시도:', {
             userId: req.userId,
-            username: req.username,
+            email: req.email,
             timestamp: new Date().toISOString()
         });
 
@@ -725,7 +745,7 @@ router.post('/logout', verifyToken, async (req, res) => {
 
         console.log('[LOGOUT] SUCCESS: 로그아웃 성공', {
             userId: req.userId,
-            username: req.username
+            email: req.email
         });
 
         res.json({
@@ -753,7 +773,7 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
     try {
         console.log('[WITHDRAW] 회원 탈퇴 시도:', {
             userId: req.userId,
-            username: req.username,
+            email: req.email,
             timestamp: new Date().toISOString()
         });
 
@@ -815,7 +835,7 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
 
         console.log('[WITHDRAW] SUCCESS: 회원 탈퇴 성공', {
             userId: req.userId,
-            username: req.username
+            email: req.email
         });
 
         res.json({
@@ -853,14 +873,14 @@ router.get('/profile', verifyToken, async (req, res) => {
     try {
         console.log('[PROFILE] 프로필 조회 시도:', {
             userId: req.userId,
-            username: req.username,
+            email: req.email,
             timestamp: new Date().toISOString()
         });
 
         // DB에서 사용자 정보 조회
         console.log('[PROFILE] DB 조회 시작:', { userId: req.userId });
         const result = await pool.query(
-            'SELECT id, username, email, created_at FROM users WHERE id = $1',
+            'SELECT id, email, created_at FROM users WHERE id = $1',
             [req.userId]
         );
         console.log('[PROFILE] DB 조회 완료:', { found: result.rows.length > 0 });
@@ -877,7 +897,7 @@ router.get('/profile', verifyToken, async (req, res) => {
 
         console.log('[PROFILE] SUCCESS: 프로필 조회 성공', {
             userId: result.rows[0].id,
-            username: result.rows[0].username
+            email: result.rows[0].email
         });
 
         res.json({
