@@ -24,6 +24,44 @@ const generateVerificationCode = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
+/**
+ * @swagger
+ * /api/auth/check-email:
+ *   post:
+ *     summary: 이메일 중복 확인
+ *     description: 회원가입 전 이메일 중복 여부를 확인합니다
+ *     tags:
+ *       - Authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "test@example.com"
+ *     responses:
+ *       200:
+ *         description: 이메일 사용 가능
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 exists:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: 잘못된 요청
+ */
 // 1. 이메일 중복 확인
 router.post('/check-email', async (req, res) => {
     try {
@@ -108,6 +146,49 @@ router.post('/check-email', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/auth/send-verification:
+ *   post:
+ *     summary: 이메일 인증번호 발송
+ *     description: 회원가입 시 이메일로 6자리 인증번호를 발송합니다 (5분 유효, 1분 내 재전송 제한)
+ *     tags:
+ *       - Authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "test@example.com"
+ *     responses:
+ *       200:
+ *         description: 인증번호 발송 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 expiresIn:
+ *                   type: integer
+ *                   description: 유효 시간 (초)
+ *       400:
+ *         description: 잘못된 요청
+ *       409:
+ *         description: 이미 등록된 이메일
+ *       429:
+ *         description: 재전송 제한 (1분 이내)
+ */
 // 2. 인증번호 발송
 router.post('/send-verification', async (req, res) => {
     try {
@@ -266,6 +347,54 @@ router.post('/send-verification', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/auth/verify-code:
+ *   post:
+ *     summary: 인증번호 검증
+ *     description: 이메일로 받은 6자리 인증번호를 검증합니다 (최대 5회 시도)
+ *     tags:
+ *       - Authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "test@example.com"
+ *               code:
+ *                 type: string
+ *                 pattern: '^\d{6}$'
+ *                 description: 6자리 인증번호
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: 인증번호 검증 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: 잘못된 요청
+ *       401:
+ *         description: 인증번호 불일치
+ *       404:
+ *         description: 인증번호 없음 또는 만료됨
+ *       429:
+ *         description: 시도 횟수 초과
+ */
 // 3. 인증번호 검증
 router.post('/verify-code', async (req, res) => {
     try {
@@ -393,6 +522,63 @@ router.post('/verify-code', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/auth/signup:
+ *   post:
+ *     summary: 회원가입
+ *     description: 이메일 인증 후 새 사용자 계정을 생성합니다
+ *     tags:
+ *       - Authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "test@example.com"
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 6
+ *                 example: "password123"
+ *               code:
+ *                 type: string
+ *                 pattern: '^\d{6}$'
+ *                 description: 이메일로 받은 6자리 인증번호
+ *                 example: "123456"
+ *     responses:
+ *       201:
+ *         description: 회원가입 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     email:
+ *                       type: string
+ *       400:
+ *         description: 잘못된 요청 또는 인증번호 불일치
+ *       409:
+ *         description: 이메일 중복
+ */
 // 4. 회원가입
 router.post('/signup', async (req, res) => {
     try {
@@ -586,6 +772,59 @@ router.post('/signup', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: 로그인
+ *     description: 이메일과 비밀번호로 로그인하여 JWT 토큰을 발급받습니다
+ *     tags:
+ *       - Authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "test@example.com"
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: "password123"
+ *     responses:
+ *       200:
+ *         description: 로그인 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 token:
+ *                   type: string
+ *                   description: JWT 인증 토큰
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     email:
+ *                       type: string
+ *       400:
+ *         description: 잘못된 요청
+ *       401:
+ *         description: 인증 실패 (잘못된 이메일 또는 비밀번호)
+ */
 // 5. 로그인
 router.post('/login', async (req, res) => {
     try {
@@ -731,6 +970,31 @@ router.post('/login', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: 로그아웃
+ *     description: 로그아웃을 수행합니다 (클라이언트에서 토큰 삭제 필요)
+ *     tags:
+ *       - Authentication
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 로그아웃 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       401:
+ *         description: 인증 실패
+ */
 // 6. 로그아웃
 router.post('/logout', verifyToken, async (req, res) => {
     try {
@@ -769,6 +1033,49 @@ router.post('/logout', verifyToken, async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/auth/withdraw:
+ *   delete:
+ *     summary: 회원 탈퇴
+ *     description: 비밀번호 확인 후 계정을 삭제합니다 (복구 불가능)
+ *     tags:
+ *       - Authentication
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - password
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 description: 현재 비밀번호
+ *                 example: "password123"
+ *     responses:
+ *       200:
+ *         description: 회원 탈퇴 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: 잘못된 요청
+ *       401:
+ *         description: 비밀번호 불일치
+ *       404:
+ *         description: 사용자 없음
+ */
 // 7. 회원 탈퇴
 router.delete('/withdraw', verifyToken, async (req, res) => {
     try {
@@ -869,6 +1176,41 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/auth/profile:
+ *   get:
+ *     summary: 프로필 조회
+ *     description: 로그인한 사용자의 프로필 정보를 조회합니다
+ *     tags:
+ *       - Authentication
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 프로필 조회 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     email:
+ *                       type: string
+ *                     created_at:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 사용자 없음
+ */
 // 8. 보호된 라우트 예시
 router.get('/profile', verifyToken, async (req, res) => {
     try {

@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "docs": "node scripts/generate-api-docs.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
