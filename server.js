@@ -22,17 +22,35 @@ app.use('/api/auth', authRoutes);
 app.get('/health/login', async (req, res) => {
     try {
         const redisPing = await redisClient.ping();
-        res.json({
+        const redisConnected = redisPing === 'PONG';
+
+        // Redis 연결 실패 시 503 Service Unavailable 반환
+        if (!redisConnected) {
+            return res.status(503).json({
+                success: false,
+                code: 'REDIS_UNAVAILABLE',
+                message: 'Redis connection failed',
+                server: 'mve-login-server',
+                redis: 'disconnected',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        res.status(200).json({
             success: true,
+            code: 'HEALTH_CHECK_OK',
+            message: 'Login server is healthy',
             server: 'mve-login-server',
-            redis: redisPing === 'PONG' ? 'connected' : 'disconnected',
+            redis: 'connected',
             timestamp: new Date().toISOString()
         });
     } catch (error) {
-        res.json({
+        // 예외 발생 시 503 Service Unavailable 반환
+        res.status(503).json({
             success: false,
-            error: 'SERVER_PROBLEM',
-            message: 'There is some error in Server.',
+            code: 'HEALTH_CHECK_FAILED',
+            message: 'Health check failed',
+            details: error.message,
             timestamp: new Date().toISOString()
         });
     }

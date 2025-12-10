@@ -77,7 +77,7 @@ router.post('/check-email', async (req, res) => {
             console.log('[CHECK-EMAIL] ERROR: 이메일 누락');
             return res.status(400).json({
                 success: false,
-                error: 'MISSING_EMAIL',
+                code: 'MISSING_EMAIL',
                 message: 'Email is required'
             });
         }
@@ -86,7 +86,7 @@ router.post('/check-email', async (req, res) => {
             console.log('[CHECK-EMAIL] ERROR: 잘못된 입력 타입');
             return res.status(400).json({
                 success: false,
-                error: 'INVALID_INPUT_TYPE',
+                code: 'INVALID_INPUT_TYPE',
                 message: 'Email must be a string'
             });
         }
@@ -97,7 +97,7 @@ router.post('/check-email', async (req, res) => {
             console.log('[CHECK-EMAIL] ERROR: 잘못된 이메일 형식', { email });
             return res.status(400).json({
                 success: false,
-                error: 'INVALID_EMAIL_FORMAT',
+                code: 'INVALID_EMAIL_FORMAT',
                 message: 'Invalid email format'
             });
         }
@@ -114,11 +114,11 @@ router.post('/check-email', async (req, res) => {
 
         console.log('[CHECK-EMAIL] SUCCESS:', { email, exists });
 
-        res.json({
+        res.status(200).json({
             success: !exists,
-            exists: exists,
-            error: exists ? 'EMAIL_ALREADY_EXISTS' : null,
-            message: exists ? 'Email already in use' : 'Email is available'
+            code: exists ? 'EMAIL_ALREADY_EXISTS' : 'EMAIL_AVAILABLE',
+            message: exists ? 'Email already in use' : 'Email is available',
+            exists: exists
         });
 
     } catch (error) {
@@ -132,15 +132,15 @@ router.post('/check-email', async (req, res) => {
         if (error.code) {
             return res.status(500).json({
                 success: false,
-                error: 'DATABASE_ERROR',
+                code: 'DATABASE_ERROR',
                 message: 'Database error',
-                code: error.code
+                dbCode: error.code
             });
         }
 
         res.status(500).json({
             success: false,
-            error: 'INTERNAL_SERVER_ERROR',
+            code: 'INTERNAL_SERVER_ERROR',
             message: 'Server error'
         });
     }
@@ -204,7 +204,7 @@ router.post('/send-verification', async (req, res) => {
             console.log('[SEND-VERIFICATION] ERROR: 이메일 누락');
             return res.status(400).json({
                 success: false,
-                error: 'MISSING_EMAIL',
+                code: 'MISSING_EMAIL',
                 message: 'Email is required'
             });
         }
@@ -213,7 +213,7 @@ router.post('/send-verification', async (req, res) => {
             console.log('[SEND-VERIFICATION] ERROR: 잘못된 입력 타입');
             return res.status(400).json({
                 success: false,
-                error: 'INVALID_INPUT_TYPE',
+                code: 'INVALID_INPUT_TYPE',
                 message: 'Email must be a string'
             });
         }
@@ -224,7 +224,7 @@ router.post('/send-verification', async (req, res) => {
             console.log('[SEND-VERIFICATION] ERROR: 잘못된 이메일 형식', { email });
             return res.status(400).json({
                 success: false,
-                error: 'INVALID_EMAIL_FORMAT',
+                code: 'INVALID_EMAIL_FORMAT',
                 message: 'Invalid email format'
             });
         }
@@ -240,7 +240,7 @@ router.post('/send-verification', async (req, res) => {
             console.log('[SEND-VERIFICATION] ERROR: 이미 등록된 이메일', { email });
             return res.status(409).json({
                 success: false,
-                error: 'EMAIL_ALREADY_EXISTS',
+                code: 'EMAIL_ALREADY_EXISTS',
                 message: 'Email is already registered'
             });
         }
@@ -255,7 +255,7 @@ router.post('/send-verification', async (req, res) => {
             const ttl = await redisClient.ttl(rateLimitKey);
             return res.status(429).json({
                 success: false,
-                error: 'TOO_MANY_REQUESTS',
+                code: 'TOO_MANY_REQUESTS',
                 message: 'Please wait before requesting another code',
                 retryAfter: ttl > 0 ? ttl : 60
             });
@@ -307,8 +307,9 @@ router.post('/send-verification', async (req, res) => {
 
         console.log('[SEND-VERIFICATION] SUCCESS:', { email });
 
-        res.json({
+        res.status(200).json({
             success: true,
+            code: 'VERIFICATION_CODE_SENT',
             message: 'Verification code sent to email',
             expiresIn: 300 // 초 단위
         });
@@ -325,7 +326,7 @@ router.post('/send-verification', async (req, res) => {
         if (error.message && error.message.includes('mail')) {
             return res.status(500).json({
                 success: false,
-                error: 'EMAIL_SEND_ERROR',
+                code: 'EMAIL_SEND_ERROR',
                 message: 'Failed to send verification email'
             });
         }
@@ -333,15 +334,15 @@ router.post('/send-verification', async (req, res) => {
         if (error.code) {
             return res.status(500).json({
                 success: false,
-                error: 'DATABASE_ERROR',
+                code: 'DATABASE_ERROR',
                 message: 'Database error',
-                code: error.code
+                dbCode: error.code
             });
         }
 
         res.status(500).json({
             success: false,
-            error: 'INTERNAL_SERVER_ERROR',
+            code: 'INTERNAL_SERVER_ERROR',
             message: 'Server error'
         });
     }
@@ -413,7 +414,7 @@ router.post('/verify-code', async (req, res) => {
             });
             return res.status(400).json({
                 success: false,
-                error: 'MISSING_FIELDS',
+                code: 'MISSING_FIELDS',
                 message: 'Email and code are required',
                 details: {
                     email: !email ? 'Email is required' : 'OK',
@@ -426,7 +427,7 @@ router.post('/verify-code', async (req, res) => {
             console.log('[VERIFY-CODE] ERROR: 잘못된 입력 타입');
             return res.status(400).json({
                 success: false,
-                error: 'INVALID_INPUT_TYPE',
+                code: 'INVALID_INPUT_TYPE',
                 message: 'Email and code must be strings'
             });
         }
@@ -436,7 +437,7 @@ router.post('/verify-code', async (req, res) => {
             console.log('[VERIFY-CODE] ERROR: 잘못된 인증번호 형식', { code });
             return res.status(400).json({
                 success: false,
-                error: 'INVALID_CODE_FORMAT',
+                code: 'INVALID_CODE_FORMAT',
                 message: 'Code must be 6 digits'
             });
         }
@@ -450,7 +451,7 @@ router.post('/verify-code', async (req, res) => {
             console.log('[VERIFY-CODE] ERROR: 인증번호 없음 또는 만료됨', { email });
             return res.status(404).json({
                 success: false,
-                error: 'CODE_NOT_FOUND',
+                code: 'CODE_NOT_FOUND',
                 message: 'No verification code found or expired'
             });
         }
@@ -465,7 +466,7 @@ router.post('/verify-code', async (req, res) => {
             await redisClient.del(verificationKey);
             return res.status(429).json({
                 success: false,
-                error: 'TOO_MANY_ATTEMPTS',
+                code: 'TOO_MANY_ATTEMPTS',
                 message: 'Too many failed attempts. Please request a new code.'
             });
         }
@@ -481,7 +482,7 @@ router.post('/verify-code', async (req, res) => {
 
             return res.status(401).json({
                 success: false,
-                error: 'INVALID_CODE',
+                code: 'INVALID_CODE',
                 message: 'Invalid verification code',
                 attemptsRemaining: 5 - verification.attempts
             });
@@ -492,8 +493,9 @@ router.post('/verify-code', async (req, res) => {
 
         console.log('[VERIFY-CODE] SUCCESS:', { email });
 
-        res.json({
+        res.status(200).json({
             success: true,
+            code: 'EMAIL_VERIFIED',
             message: 'Email verified successfully'
         });
 
@@ -508,15 +510,15 @@ router.post('/verify-code', async (req, res) => {
         if (error.code) {
             return res.status(500).json({
                 success: false,
-                error: 'DATABASE_ERROR',
+                code: 'DATABASE_ERROR',
                 message: 'Database error',
-                code: error.code
+                dbCode: error.code
             });
         }
 
         res.status(500).json({
             success: false,
-            error: 'INTERNAL_SERVER_ERROR',
+            code: 'INTERNAL_SERVER_ERROR',
             message: 'Server error'
         });
     }
@@ -598,7 +600,7 @@ router.post('/signup', async (req, res) => {
             });
             return res.status(400).json({
                 success: false,
-                error: 'MISSING_FIELDS',
+                code: 'MISSING_FIELDS',
                 message: 'All fields required',
                 details: {
                     password: !password ? 'Password is required' : 'OK',
@@ -617,7 +619,7 @@ router.post('/signup', async (req, res) => {
             });
             return res.status(400).json({
                 success: false,
-                error: 'INVALID_INPUT_TYPE',
+                code: 'INVALID_INPUT_TYPE',
                 message: 'All fields must be strings'
             });
         }
@@ -628,7 +630,7 @@ router.post('/signup', async (req, res) => {
             console.log('[SIGNUP] ERROR: 잘못된 이메일 형식', { email });
             return res.status(400).json({
                 success: false,
-                error: 'INVALID_EMAIL_FORMAT',
+                code: 'INVALID_EMAIL_FORMAT',
                 message: 'Invalid email format'
             });
         }
@@ -638,7 +640,7 @@ router.post('/signup', async (req, res) => {
             console.log('[SIGNUP] ERROR: 잘못된 인증번호 형식', { code });
             return res.status(400).json({
                 success: false,
-                error: 'INVALID_CODE_FORMAT',
+                code: 'INVALID_CODE_FORMAT',
                 message: 'Code must be 6 digits'
             });
         }
@@ -648,7 +650,7 @@ router.post('/signup', async (req, res) => {
             console.log('[SIGNUP] ERROR: 비밀번호 길이 부족', { length: password.length });
             return res.status(400).json({
                 success: false,
-                error: 'WEAK_PASSWORD',
+                code: 'WEAK_PASSWORD',
                 message: 'Password must be at least 6 characters long'
             });
         }
@@ -662,7 +664,7 @@ router.post('/signup', async (req, res) => {
             console.log('[SIGNUP] ERROR: 인증번호 없음 또는 만료됨', { email });
             return res.status(404).json({
                 success: false,
-                error: 'CODE_NOT_FOUND',
+                code: 'CODE_NOT_FOUND',
                 message: 'No verification code found or expired. Please request a new code.'
             });
         }
@@ -674,7 +676,7 @@ router.post('/signup', async (req, res) => {
             console.log('[SIGNUP] ERROR: 인증번호 불일치', { email });
             return res.status(401).json({
                 success: false,
-                error: 'INVALID_CODE',
+                code: 'INVALID_CODE',
                 message: 'Invalid verification code'
             });
         }
@@ -693,7 +695,7 @@ router.post('/signup', async (req, res) => {
             console.log('[SIGNUP] ERROR: 중복된 이메일', { email });
             return res.status(409).json({
                 success: false,
-                error: 'USER_ALREADY_EXISTS',
+                code: 'USER_ALREADY_EXISTS',
                 message: 'Email already in use'
             });
         }
@@ -722,6 +724,7 @@ router.post('/signup', async (req, res) => {
 
         res.status(201).json({
             success: true,
+            code: 'USER_CREATED',
             message: 'User created',
             user: result.rows[0]
         });
@@ -741,17 +744,17 @@ router.post('/signup', async (req, res) => {
             if (error.code === '23505') { // Unique violation
                 return res.status(409).json({
                     success: false,
-                    error: 'DUPLICATE_ENTRY',
+                    code: 'DUPLICATE_ENTRY',
                     message: 'Email already exists',
-                    code: error.code
+                    dbCode: error.code
                 });
             }
 
             return res.status(500).json({
                 success: false,
-                error: 'DATABASE_ERROR',
+                code: 'DATABASE_ERROR',
                 message: 'Database error',
-                code: error.code
+                dbCode: error.code
             });
         }
 
@@ -759,14 +762,14 @@ router.post('/signup', async (req, res) => {
         if (error.message && error.message.includes('bcrypt')) {
             return res.status(500).json({
                 success: false,
-                error: 'ENCRYPTION_ERROR',
+                code: 'ENCRYPTION_ERROR',
                 message: 'Password encryption error'
             });
         }
 
         res.status(500).json({
             success: false,
-            error: 'INTERNAL_SERVER_ERROR',
+            code: 'INTERNAL_SERVER_ERROR',
             message: 'Server error'
         });
     }
@@ -837,7 +840,7 @@ router.post('/login', async (req, res) => {
             console.log('[LOGIN] ERROR: 필수 필드 누락', { email: !!email, password: !!password });
             return res.status(400).json({
                 success: false,
-                error: 'MISSING_FIELDS',
+                code: 'MISSING_FIELDS',
                 message: 'Email and password required',
                 details: {
                     email: !email ? 'Email is required' : 'OK',
@@ -854,7 +857,7 @@ router.post('/login', async (req, res) => {
             });
             return res.status(400).json({
                 success: false,
-                error: 'INVALID_INPUT_TYPE',
+                code: 'INVALID_INPUT_TYPE',
                 message: 'Email and password must be strings'
             });
         }
@@ -871,7 +874,7 @@ router.post('/login', async (req, res) => {
             console.log('[LOGIN] ERROR: 사용자 없음', { email });
             return res.status(401).json({
                 success: false,
-                error: 'USER_NOT_FOUND',
+                code: 'USER_NOT_FOUND',
                 message: 'Invalid credentials'
             });
         }
@@ -887,7 +890,7 @@ router.post('/login', async (req, res) => {
             console.log('[LOGIN] ERROR: 비밀번호 불일치', { email });
             return res.status(401).json({
                 success: false,
-                error: 'INVALID_PASSWORD',
+                code: 'INVALID_PASSWORD',
                 message: 'Invalid credentials'
             });
         }
@@ -897,7 +900,7 @@ router.post('/login', async (req, res) => {
             console.error('[LOGIN] CRITICAL ERROR: JWT_SECRET 설정되지 않음');
             return res.status(500).json({
                 success: false,
-                error: 'SERVER_CONFIG_ERROR',
+                code: 'SERVER_CONFIG_ERROR',
                 message: 'Server configuration error'
             });
         }
@@ -916,8 +919,9 @@ router.post('/login', async (req, res) => {
             email: user.email
         });
 
-        res.json({
+        res.status(200).json({
             success: true,
+            code: 'LOGIN_SUCCESS',
             message: 'Login successful',
             token: token,
             user: {
@@ -938,7 +942,7 @@ router.post('/login', async (req, res) => {
         if (error.code) {
             return res.status(500).json({
                 success: false,
-                error: 'DATABASE_ERROR',
+                code: 'DATABASE_ERROR',
                 message: 'Database connection error',
                 code: error.code
             });
@@ -948,7 +952,7 @@ router.post('/login', async (req, res) => {
         if (error.message && error.message.includes('bcrypt')) {
             return res.status(500).json({
                 success: false,
-                error: 'ENCRYPTION_ERROR',
+                code: 'ENCRYPTION_ERROR',
                 message: 'Password verification error'
             });
         }
@@ -957,14 +961,14 @@ router.post('/login', async (req, res) => {
         if (error.message && error.message.includes('jwt')) {
             return res.status(500).json({
                 success: false,
-                error: 'TOKEN_GENERATION_ERROR',
+                code: 'TOKEN_GENERATION_ERROR',
                 message: 'Token generation error'
             });
         }
 
         res.status(500).json({
             success: false,
-            error: 'INTERNAL_SERVER_ERROR',
+            code: 'INTERNAL_SERVER_ERROR',
             message: 'Server error'
         });
     }
@@ -1013,8 +1017,9 @@ router.post('/logout', verifyToken, async (req, res) => {
             email: req.email
         });
 
-        res.json({
+        res.status(200).json({
             success: true,
+            code: 'LOGOUT_SUCCESS',
             message: 'Logout successful. Please delete the token on client side.'
         });
 
@@ -1027,7 +1032,7 @@ router.post('/logout', verifyToken, async (req, res) => {
 
         res.status(500).json({
             success: false,
-            error: 'INTERNAL_SERVER_ERROR',
+            code: 'INTERNAL_SERVER_ERROR',
             message: 'Server error'
         });
     }
@@ -1092,7 +1097,7 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
             console.log('[WITHDRAW] ERROR: 비밀번호 누락');
             return res.status(400).json({
                 success: false,
-                error: 'MISSING_PASSWORD',
+                code: 'MISSING_PASSWORD',
                 message: 'Password is required for account deletion'
             });
         }
@@ -1108,7 +1113,7 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
             console.log('[WITHDRAW] ERROR: 사용자 없음', { userId: req.userId });
             return res.status(404).json({
                 success: false,
-                error: 'USER_NOT_FOUND',
+                code: 'USER_NOT_FOUND',
                 message: 'User not found'
             });
         }
@@ -1123,7 +1128,7 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
             console.log('[WITHDRAW] ERROR: 비밀번호 불일치', { userId: req.userId });
             return res.status(401).json({
                 success: false,
-                error: 'INVALID_PASSWORD',
+                code: 'INVALID_PASSWORD',
                 message: 'Invalid password'
             });
         }
@@ -1146,8 +1151,9 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
             email: req.email
         });
 
-        res.json({
+        res.status(200).json({
             success: true,
+            code: 'ACCOUNT_DELETED',
             message: 'Account deleted successfully'
         });
 
@@ -1162,15 +1168,15 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
         if (error.code) {
             return res.status(500).json({
                 success: false,
-                error: 'DATABASE_ERROR',
+                code: 'DATABASE_ERROR',
                 message: 'Database error',
-                code: error.code
+                dbCode: error.code
             });
         }
 
         res.status(500).json({
             success: false,
-            error: 'INTERNAL_SERVER_ERROR',
+            code: 'INTERNAL_SERVER_ERROR',
             message: 'Server error'
         });
     }
@@ -1233,7 +1239,7 @@ router.get('/profile', verifyToken, async (req, res) => {
             console.log('[PROFILE] ERROR: 사용자 없음', { userId: req.userId });
             return res.status(404).json({
                 success: false,
-                error: 'USER_NOT_FOUND',
+                code: 'USER_NOT_FOUND',
                 message: 'User not found'
             });
         }
@@ -1243,8 +1249,10 @@ router.get('/profile', verifyToken, async (req, res) => {
             email: result.rows[0].email
         });
 
-        res.json({
+        res.status(200).json({
             success: true,
+            code: 'PROFILE_RETRIEVED',
+            message: 'Profile retrieved successfully',
             user: result.rows[0]
         });
 
@@ -1261,15 +1269,15 @@ router.get('/profile', verifyToken, async (req, res) => {
         if (error.code) {
             return res.status(500).json({
                 success: false,
-                error: 'DATABASE_ERROR',
+                code: 'DATABASE_ERROR',
                 message: 'Database error',
-                code: error.code
+                dbCode: error.code
             });
         }
 
         res.status(500).json({
             success: false,
-            error: 'INTERNAL_SERVER_ERROR',
+            code: 'INTERNAL_SERVER_ERROR',
             message: 'Server error'
         });
     }
