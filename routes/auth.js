@@ -47,7 +47,7 @@ const generateVerificationCode = () => {
  *                 example: "test@example.com"
  *     responses:
  *       200:
- *         description: 이메일 사용 가능
+ *         description: 이메일 사용 가능 또는 중복
  *         content:
  *           application/json:
  *             schema:
@@ -55,12 +55,49 @@ const generateVerificationCode = () => {
  *               properties:
  *                 success:
  *                   type: boolean
- *                 exists:
- *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: string
+ *                   example: "EMAIL_AVAILABLE"
+ *                   description: "EMAIL_AVAILABLE (사용 가능) 또는 EMAIL_ALREADY_EXISTS (중복)"
  *                 message:
  *                   type: string
+ *                   example: "Email is available"
+ *                 exists:
+ *                   type: boolean
+ *                   example: false
  *       400:
  *         description: 잘못된 요청
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INVALID_EMAIL_FORMAT"
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid email format"
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INTERNAL_SERVER_ERROR"
+ *                 message:
+ *                   type: string
+ *                   example: "Server error"
  */
 // 1. 이메일 중복 확인
 router.post('/check-email', async (req, res) => {
@@ -177,17 +214,84 @@ router.post('/check-email', async (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: string
+ *                   example: "VERIFICATION_CODE_SENT"
  *                 message:
  *                   type: string
+ *                   example: "Verification code sent to email"
  *                 expiresIn:
  *                   type: integer
  *                   description: 유효 시간 (초)
+ *                   example: 300
  *       400:
  *         description: 잘못된 요청
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INVALID_EMAIL_FORMAT"
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid email format"
  *       409:
  *         description: 이미 등록된 이메일
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "EMAIL_ALREADY_EXISTS"
+ *                 message:
+ *                   type: string
+ *                   example: "Email is already registered"
  *       429:
  *         description: 재전송 제한 (1분 이내)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "TOO_MANY_REQUESTS"
+ *                 message:
+ *                   type: string
+ *                   example: "Please wait before requesting another code"
+ *                 retryAfter:
+ *                   type: integer
+ *                   example: 60
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INTERNAL_SERVER_ERROR"
+ *                 message:
+ *                   type: string
+ *                   example: "Server error"
  */
 // 2. 인증번호 발송
 router.post('/send-verification', async (req, res) => {
@@ -385,16 +489,96 @@ router.post('/send-verification', async (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: string
+ *                   example: "EMAIL_VERIFIED"
  *                 message:
  *                   type: string
+ *                   example: "Email verified successfully"
  *       400:
  *         description: 잘못된 요청
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INVALID_CODE_FORMAT"
+ *                 message:
+ *                   type: string
+ *                   example: "Code must be 6 digits"
  *       401:
  *         description: 인증번호 불일치
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INVALID_CODE"
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid verification code"
+ *                 attemptsRemaining:
+ *                   type: integer
+ *                   example: 4
  *       404:
  *         description: 인증번호 없음 또는 만료됨
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "CODE_NOT_FOUND"
+ *                 message:
+ *                   type: string
+ *                   example: "No verification code found or expired"
  *       429:
  *         description: 시도 횟수 초과
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "TOO_MANY_ATTEMPTS"
+ *                 message:
+ *                   type: string
+ *                   example: "Too many failed attempts. Please request a new code."
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INTERNAL_SERVER_ERROR"
+ *                 message:
+ *                   type: string
+ *                   example: "Server error"
  */
 // 3. 인증번호 검증
 router.post('/verify-code', async (req, res) => {
@@ -567,19 +751,102 @@ router.post('/verify-code', async (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: string
+ *                   example: "USER_CREATED"
  *                 message:
  *                   type: string
+ *                   example: "User created"
  *                 user:
  *                   type: object
  *                   properties:
  *                     id:
  *                       type: integer
+ *                       example: 1
  *                     email:
  *                       type: string
+ *                       example: "test@example.com"
  *       400:
- *         description: 잘못된 요청 또는 인증번호 불일치
+ *         description: 잘못된 요청
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "WEAK_PASSWORD"
+ *                 message:
+ *                   type: string
+ *                   example: "Password must be at least 6 characters long"
+ *       401:
+ *         description: 인증번호 불일치
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INVALID_CODE"
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid verification code"
+ *       404:
+ *         description: 인증번호 없음 또는 만료됨
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "CODE_NOT_FOUND"
+ *                 message:
+ *                   type: string
+ *                   example: "No verification code found or expired. Please request a new code."
  *       409:
  *         description: 이메일 중복
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "USER_ALREADY_EXISTS"
+ *                 message:
+ *                   type: string
+ *                   example: "Email already in use"
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INTERNAL_SERVER_ERROR"
+ *                 message:
+ *                   type: string
+ *                   example: "Server error"
  */
 // 4. 회원가입
 router.post('/signup', async (req, res) => {
@@ -811,22 +1078,74 @@ router.post('/signup', async (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: string
+ *                   example: "LOGIN_SUCCESS"
  *                 message:
  *                   type: string
+ *                   example: "Login successful"
  *                 token:
  *                   type: string
  *                   description: JWT 인증 토큰
+ *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  *                 user:
  *                   type: object
  *                   properties:
  *                     id:
  *                       type: integer
+ *                       example: 1
  *                     email:
  *                       type: string
+ *                       example: "test@example.com"
  *       400:
  *         description: 잘못된 요청
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "MISSING_FIELDS"
+ *                 message:
+ *                   type: string
+ *                   example: "Email and password required"
  *       401:
  *         description: 인증 실패 (잘못된 이메일 또는 비밀번호)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INVALID_PASSWORD"
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid credentials"
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INTERNAL_SERVER_ERROR"
+ *                 message:
+ *                   type: string
+ *                   example: "Server error"
  */
 // 5. 로그인
 router.post('/login', async (req, res) => {
@@ -994,10 +1313,45 @@ router.post('/login', async (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: string
+ *                   example: "LOGOUT_SUCCESS"
  *                 message:
  *                   type: string
+ *                   example: "Logout successful. Please delete the token on client side."
  *       401:
  *         description: 인증 실패
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "UNAUTHORIZED"
+ *                 message:
+ *                   type: string
+ *                   example: "Access denied"
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INTERNAL_SERVER_ERROR"
+ *                 message:
+ *                   type: string
+ *                   example: "Server error"
  */
 // 6. 로그아웃
 router.post('/logout', verifyToken, async (req, res) => {
@@ -1072,14 +1426,77 @@ router.post('/logout', verifyToken, async (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: string
+ *                   example: "ACCOUNT_DELETED"
  *                 message:
  *                   type: string
+ *                   example: "Account deleted successfully"
  *       400:
  *         description: 잘못된 요청
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "MISSING_PASSWORD"
+ *                 message:
+ *                   type: string
+ *                   example: "Password is required for account deletion"
  *       401:
- *         description: 비밀번호 불일치
+ *         description: 비밀번호 불일치 또는 인증 실패
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INVALID_PASSWORD"
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid password"
  *       404:
  *         description: 사용자 없음
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "USER_NOT_FOUND"
+ *                 message:
+ *                   type: string
+ *                   example: "User not found"
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INTERNAL_SERVER_ERROR"
+ *                 message:
+ *                   type: string
+ *                   example: "Server error"
  */
 // 7. 회원 탈퇴
 router.delete('/withdraw', verifyToken, async (req, res) => {
@@ -1202,20 +1619,74 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: string
+ *                   example: "PROFILE_RETRIEVED"
+ *                 message:
+ *                   type: string
+ *                   example: "Profile retrieved successfully"
  *                 user:
  *                   type: object
  *                   properties:
  *                     id:
  *                       type: integer
+ *                       example: 1
  *                     email:
  *                       type: string
+ *                       example: "test@example.com"
  *                     created_at:
  *                       type: string
  *                       format: date-time
+ *                       example: "2024-01-01T00:00:00.000Z"
  *       401:
  *         description: 인증 실패
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "UNAUTHORIZED"
+ *                 message:
+ *                   type: string
+ *                   example: "Access denied"
  *       404:
  *         description: 사용자 없음
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "USER_NOT_FOUND"
+ *                 message:
+ *                   type: string
+ *                   example: "User not found"
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "INTERNAL_SERVER_ERROR"
+ *                 message:
+ *                   type: string
+ *                   example: "Server error"
  */
 // 8. 보호된 라우트 예시
 router.get('/profile', verifyToken, async (req, res) => {
