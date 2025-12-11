@@ -4,7 +4,7 @@
     "uniqueCodes": 40,
     "filesWithCodes": 4,
     "totalFilesScanned": 7,
-    "generatedAt": "2025-12-11T01:51:39.721Z"
+    "generatedAt": "2025-12-11T05:48:44.731Z"
   },
   "statistics": [
     {
@@ -262,11 +262,11 @@
       "count": 2,
       "locations": [
         {
-          "file": "scripts\\analyze-response-codes.js",
+          "file": "working-scripts\\analyze-response-codes.js",
           "line": 19
         },
         {
-          "file": "scripts\\analyze-response-codes.js",
+          "file": "working-scripts\\analyze-response-codes.js",
           "line": 19
         }
       ]
@@ -492,16 +492,6 @@
       ]
     },
     {
-      "code": "...",
-      "count": 1,
-      "locations": [
-        {
-          "file": "scripts\\analyze-response-codes.js",
-          "line": 5
-        }
-      ]
-    },
-    {
       "code": "REDIS_UNAVAILABLE",
       "count": 1,
       "locations": [
@@ -528,6 +518,16 @@
         {
           "file": "server.js",
           "line": 51
+        }
+      ]
+    },
+    {
+      "code": "...",
+      "count": 1,
+      "locations": [
+        {
+          "file": "working-scripts\\analyze-response-codes.js",
+          "line": 5
         }
       ]
     }
