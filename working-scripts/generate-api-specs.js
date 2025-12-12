@@ -12,6 +12,7 @@
 const swaggerJsdoc = require('swagger-jsdoc');
 const fs = require('fs');
 const path = require('path');
+const apiSchemas = require('../schemas/api-schemas');
 
 console.log('API 문서 생성 시작...\n');
 
@@ -79,7 +80,9 @@ MVE (Meta Virtual Environment) Login Server API
           bearerFormat: 'JWT',
           description: 'MVE Login Server에서 발급받은 JWT 토큰을 입력하세요.'
         }
-      }
+      },
+      // schemas/api-schemas.js에서 import한 스키마 사용
+      schemas: apiSchemas
     },
     security: [
       {
