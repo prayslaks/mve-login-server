@@ -747,26 +747,7 @@ router.post('/verify-code', async (req, res) => {
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 code:
- *                   type: string
- *                   example: "USER_CREATED"
- *                 message:
- *                   type: string
- *                   example: "User created"
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                       example: 1
- *                     email:
- *                       type: string
- *                       example: "test@example.com"
+ *               $ref: '#/components/schemas/SignupResponse'
  *       400:
  *         description: 잘못된 요청
  *         content:
@@ -1074,78 +1055,25 @@ router.post('/signup', async (req, res) => {
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 code:
- *                   type: string
- *                   example: "LOGIN_SUCCESS"
- *                 message:
- *                   type: string
- *                   example: "Login successful"
- *                 token:
- *                   type: string
- *                   description: JWT 인증 토큰
- *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                       example: 1
- *                     email:
- *                       type: string
- *                       example: "test@example.com"
+ *               $ref: '#/components/schemas/LoginResponse'
  *       400:
  *         description: 잘못된 요청
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 code:
- *                   type: string
- *                   example: "MISSING_FIELDS"
- *                 message:
- *                   type: string
- *                   example: "Email and password required"
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
  *         description: 인증 실패 (잘못된 이메일 또는 비밀번호)
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 code:
- *                   type: string
- *                   example: "INVALID_PASSWORD"
- *                 message:
- *                   type: string
- *                   example: "Invalid credentials"
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
  *         description: 서버 오류
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 code:
- *                   type: string
- *                   example: "INTERNAL_SERVER_ERROR"
- *                 message:
- *                   type: string
- *                   example: "Server error"
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 // 5. 로그인
 router.post('/login', async (req, res) => {
@@ -1615,30 +1543,7 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 code:
- *                   type: string
- *                   example: "PROFILE_RETRIEVED"
- *                 message:
- *                   type: string
- *                   example: "Profile retrieved successfully"
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                       example: 1
- *                     email:
- *                       type: string
- *                       example: "test@example.com"
- *                     created_at:
- *                       type: string
- *                       format: date-time
- *                       example: "2024-01-01T00:00:00.000Z"
+ *               $ref: '#/components/schemas/ProfileResponse'
  *       401:
  *         description: 인증 실패
  *         content:
@@ -1720,11 +1625,16 @@ router.get('/profile', verifyToken, async (req, res) => {
             email: result.rows[0].email
         });
 
+        const user = result.rows[0];
         res.status(200).json({
             success: true,
             code: 'PROFILE_RETRIEVED',
             message: 'Profile retrieved successfully',
-            user: result.rows[0]
+            user: {
+                id: user.id,
+                email: user.email,
+                createdAt: user.created_at
+            }
         });
 
     } catch (error) {
