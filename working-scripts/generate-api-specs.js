@@ -13,7 +13,7 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const fs = require('fs');
 const path = require('path');
 
-console.log('📝 API 문서 생성 시작...\n');
+console.log('API 문서 생성 시작...\n');
 
 // Swagger JSDoc 옵션
 const options = {
@@ -26,10 +26,10 @@ const options = {
 MVE (Meta Virtual Environment) Login Server API
 
 이 API는 사용자 인증 기능을 제공합니다:
-- 🔐 회원가입 (이메일 인증)
-- 🔑 로그인 (JWT 토큰 발급)
-- 👤 프로필 조회
-- ✉️ 이메일 인증번호 발송 및 검증
+- 회원가입 (이메일 인증)
+- 로그인 (JWT 토큰 발급)
+- 프로필 조회
+- 이메일 인증번호 발송 및 검증
 
 **토큰 발급**: 로그인 성공 시 JWT 토큰이 발급됩니다.
 **토큰 사용**: Resource Server API 호출 시 Authorization 헤더에 포함하세요.
@@ -109,13 +109,13 @@ try {
   const outputPath = path.join(outputDir, 'api-spec.json');
   fs.writeFileSync(outputPath, JSON.stringify(spec, null, 2), 'utf8');
 
-  console.log('✅ API 문서 생성 완료!');
-  console.log(`📄 파일 위치: ${outputPath}`);
-  console.log(`📊 총 엔드포인트: ${Object.keys(spec.paths || {}).length}개\n`);
+  console.log('API 문서 생성 완료!');
+  console.log(`파일 위치: ${outputPath}`);
+  console.log(`총 엔드포인트: ${Object.keys(spec.paths || {}).length}개\n`);
 
   // 생성된 엔드포인트 목록 출력
   if (spec.paths) {
-    console.log('📋 생성된 API 엔드포인트:');
+    console.log('생성된 API 엔드포인트:');
     Object.keys(spec.paths).sort().forEach(path => {
       const methods = Object.keys(spec.paths[path]).filter(m => m !== 'parameters');
       methods.forEach(method => {
@@ -125,12 +125,12 @@ try {
     });
   }
 
-  console.log('\n💡 다음 명령으로 Swagger UI에서 확인할 수 있습니다:');
+  console.log('\n다음 명령으로 Swagger UI에서 확인할 수 있습니다:');
   console.log('   npm start');
   console.log('   브라우저에서 http://localhost:3001/api-docs 접속\n');
 
 } catch (error) {
-  console.error('❌ API 문서 생성 실패:', error.message);
+  console.error('API 문서 생성 실패:', error.message);
   console.error(error.stack);
   process.exit(1);
 }
