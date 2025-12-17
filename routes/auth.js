@@ -747,7 +747,26 @@ router.post('/verify-code', async (req, res) => {
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/SignupResponse'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: string
+ *                   example: "USER_CREATED"
+ *                 message:
+ *                   type: string
+ *                   example: "User created"
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     email:
+ *                       type: string
+ *                       example: "test@example.com"
  *       400:
  *         description: 잘못된 요청
  *         content:
@@ -1055,7 +1074,30 @@ router.post('/signup', async (req, res) => {
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/LoginResponse'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: string
+ *                   example: "LOGIN_SUCCESS"
+ *                 message:
+ *                   type: string
+ *                   example: "Login successful"
+ *                 token:
+ *                   type: string
+ *                   description: JWT 토큰
+ *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     email:
+ *                       type: string
+ *                       example: "test@example.com"
  *       400:
  *         description: 잘못된 요청
  *         content:
@@ -1543,7 +1585,30 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/ProfileResponse'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 code:
+ *                   type: string
+ *                   example: "PROFILE_RETRIEVED"
+ *                 message:
+ *                   type: string
+ *                   example: "Profile retrieved successfully"
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     email:
+ *                       type: string
+ *                       example: "test@example.com"
+ *                     created_at:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2024-01-01T00:00:00.000Z"
  *       401:
  *         description: 인증 실패
  *         content:

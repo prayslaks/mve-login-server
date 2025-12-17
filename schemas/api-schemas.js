@@ -15,6 +15,7 @@ module.exports = {
   User: {
     type: 'object',
     description: '사용자 정보',
+    required: ['id', 'email', 'created_at'],
     properties: {
       id: {
         type: 'integer',
@@ -95,135 +96,14 @@ module.exports = {
         example: '23505'
       }
     }
-  },
-
-  // ============================================
-  // 이메일 인증 관련 스키마
-  // ============================================
-  EmailCheckResponse: {
-    type: 'object',
-    description: '이메일 중복 확인 응답',
-    allOf: [
-      { $ref: '#/components/schemas/SuccessResponse' }
-    ],
-    properties: {
-      exists: {
-        type: 'boolean',
-        description: '이메일 사용 중 여부',
-        example: false
-      }
-    }
-  },
-
-  VerificationCodeResponse: {
-    type: 'object',
-    description: '인증번호 발송 응답',
-    allOf: [
-      { $ref: '#/components/schemas/SuccessResponse' }
-    ],
-    properties: {
-      expiresIn: {
-        type: 'integer',
-        description: '유효 시간 (초)',
-        example: 300
-      }
-    }
-  },
-
-  RateLimitErrorResponse: {
-    type: 'object',
-    description: 'Rate Limit 에러 응답',
-    allOf: [
-      { $ref: '#/components/schemas/ErrorResponse' }
-    ],
-    properties: {
-      retryAfter: {
-        type: 'integer',
-        description: '재시도 가능 시간 (초)',
-        example: 60
-      }
-    }
-  },
-
-  VerifyCodeErrorResponse: {
-    type: 'object',
-    description: '인증번호 검증 실패 응답',
-    allOf: [
-      { $ref: '#/components/schemas/ErrorResponse' }
-    ],
-    properties: {
-      attemptsRemaining: {
-        type: 'integer',
-        description: '남은 시도 횟수',
-        example: 4
-      }
-    }
-  },
-
-  // ============================================
-  // 회원가입/로그인 응답 스키마
-  // ============================================
-  SignupResponse: {
-    type: 'object',
-    description: '회원가입 성공 응답',
-    allOf: [
-      { $ref: '#/components/schemas/SuccessResponse' }
-    ],
-    properties: {
-      user: {
-        $ref: '#/components/schemas/User'
-      }
-    }
-  },
-
-  LoginResponse: {
-    type: 'object',
-    description: '로그인 성공 응답',
-    required: ['success', 'code', 'message', 'token', 'user'],
-    properties: {
-      success: {
-        type: 'boolean',
-        example: true
-      },
-      code: {
-        type: 'string',
-        example: 'LOGIN_SUCCESS'
-      },
-      message: {
-        type: 'string',
-        example: 'Login successful'
-      },
-      token: {
-        type: 'string',
-        description: 'JWT 인증 토큰',
-        example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
-      },
-      user: {
-        type: 'object',
-        properties: {
-          id: {
-            type: 'integer',
-            example: 1
-          },
-          email: {
-            type: 'string',
-            example: 'test@example.com'
-          }
-        }
-      }
-    }
-  },
-
-  ProfileResponse: {
-    type: 'object',
-    description: '프로필 조회 응답',
-    allOf: [
-      { $ref: '#/components/schemas/SuccessResponse' }
-    ],
-    properties: {
-      user: {
-        $ref: '#/components/schemas/User'
-      }
-    }
   }
+
+  // ============================================
+  // 주의: API 엔드포인트별 응답 스키마는 routes/*.js에 인라인으로 정의됩니다.
+  // 이 파일에는 재사용 가능한 Component Schema만 정의하세요.
+  //
+  // Resource Server와 동일한 설계 패턴:
+  // - Component Schema: 여기에 정의 (User, SuccessResponse, ErrorResponse 등)
+  // - Response Schema: routes/*.js에 인라인으로 정의
+  // ============================================
 };
