@@ -15,7 +15,7 @@ module.exports = {
   User: {
     type: 'object',
     description: '사용자 정보',
-    required: ['id', 'email', 'created_at'],
+    required: ['id', 'email', 'createdAt'],
     properties: {
       id: {
         type: 'integer',
@@ -28,7 +28,7 @@ module.exports = {
         description: '사용자 이메일',
         example: 'test@example.com'
       },
-      created_at: {
+      createdAt: {
         type: 'string',
         format: 'date-time',
         description: '계정 생성 시간',

@@ -748,6 +748,7 @@ router.post('/verify-code', async (req, res) => {
  *           application/json:
  *             schema:
  *               type: object
+ *               required: [success, code, message, user]
  *               properties:
  *                 success:
  *                   type: boolean
@@ -759,14 +760,7 @@ router.post('/verify-code', async (req, res) => {
  *                   type: string
  *                   example: "User created"
  *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                       example: 1
- *                     email:
- *                       type: string
- *                       example: "test@example.com"
+ *                   $ref: '#/components/schemas/User'
  *       400:
  *         description: 잘못된 요청
  *         content:
@@ -975,7 +969,7 @@ router.post('/signup', async (req, res) => {
         // 5. DB 저장
         console.log('[SIGNUP] DB 저장 시작');
         const result = await pool.query(
-            'INSERT INTO users (password, email) VALUES ($1, $2) RETURNING id, email',
+            'INSERT INTO users (password, email) VALUES ($1, $2) RETURNING id, email, created_at',
             [hashedPassword, email]
         );
         console.log('[SIGNUP] DB 저장 완료:', { userId: result.rows[0].id });
@@ -993,7 +987,11 @@ router.post('/signup', async (req, res) => {
             success: true,
             code: 'USER_CREATED',
             message: 'User created',
-            user: result.rows[0]
+            user: {
+                id: result.rows[0].id,
+                email: result.rows[0].email,
+                createdAt: result.rows[0].created_at
+            }
         });
 
     } catch (error) {
@@ -1075,6 +1073,7 @@ router.post('/signup', async (req, res) => {
  *           application/json:
  *             schema:
  *               type: object
+ *               required: [success, code, message, token, user]
  *               properties:
  *                 success:
  *                   type: boolean
@@ -1090,14 +1089,7 @@ router.post('/signup', async (req, res) => {
  *                   description: JWT 토큰
  *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                       example: 1
- *                     email:
- *                       type: string
- *                       example: "test@example.com"
+ *                   $ref: '#/components/schemas/User'
  *       400:
  *         description: 잘못된 요청
  *         content:
@@ -1154,7 +1146,7 @@ router.post('/login', async (req, res) => {
         // 2. 사용자 조회
         console.log('[LOGIN] DB 조회 시작:', { email });
         const result = await pool.query(
-            'SELECT * FROM users WHERE email = $1',
+            'SELECT id, email, password, created_at FROM users WHERE email = $1',
             [email]
         );
         console.log('[LOGIN] DB 조회 완료:', { found: result.rows.length > 0 });
@@ -1215,7 +1207,8 @@ router.post('/login', async (req, res) => {
             token: token,
             user: {
                 id: user.id,
-                email: user.email
+                email: user.email,
+                createdAt: user.created_at
             }
         });
 
@@ -1586,6 +1579,7 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
  *           application/json:
  *             schema:
  *               type: object
+ *               required: [success, code, message, user]
  *               properties:
  *                 success:
  *                   type: boolean
@@ -1597,18 +1591,7 @@ router.delete('/withdraw', verifyToken, async (req, res) => {
  *                   type: string
  *                   example: "Profile retrieved successfully"
  *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                       example: 1
- *                     email:
- *                       type: string
- *                       example: "test@example.com"
- *                     created_at:
- *                       type: string
- *                       format: date-time
- *                       example: "2024-01-01T00:00:00.000Z"
+ *                   $ref: '#/components/schemas/User'
  *       401:
  *         description: 인증 실패
  *         content:
