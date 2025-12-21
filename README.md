@@ -640,15 +640,34 @@ mve-login-server/
 
 ## 기술 스택
 
-- **Node.js** - 런타임 환경
-- **Express** - 웹 프레임워크
-- **PostgreSQL** - 관계형 데이터베이스
-- **pg** - PostgreSQL 클라이언트
-- **bcrypt** - 비밀번호 해싱
-- **jsonwebtoken** - JWT 토큰 생성/검증
-- **nodemailer** - 이메일 전송
-- **dotenv** - 환경 변수 관리
-- **cors** - CORS 처리
+**런타임 & 프레임워크**
+- **Node.js** v20.x+ - JavaScript 런타임 환경
+- **Express** v5.1.0 - 웹 애플리케이션 프레임워크
+
+**데이터베이스 & 캐시**
+- **PostgreSQL** - 관계형 데이터베이스 (사용자 정보, 인증 데이터)
+- **pg** v8.16.3 - PostgreSQL 클라이언트 라이브러리
+- **Redis** v4.7.0 - 인메모리 캐시 (이메일 인증번호, Rate Limiting)
+
+**보안 & 인증**
+- **bcrypt** v6.0.0 - 비밀번호 해싱 (salt rounds: 10)
+- **jsonwebtoken** v9.0.2 - JWT 토큰 생성 및 검증
+- **cors** v2.8.5 - Cross-Origin Resource Sharing 처리
+
+**이메일 전송**
+- **nodemailer** v7.0.10 - SMTP 이메일 전송 (6자리 인증번호 발송)
+
+**환경 설정**
+- **dotenv** v17.2.3 - 환경 변수 관리
+
+**API 문서화** (루트 프로젝트)
+- **swagger-jsdoc** v6.2.8 - JSDoc 주석에서 OpenAPI 스펙 생성
+- **swagger-ui-express** v5.0.1 - Swagger UI 제공
+
+**인프라 (프로덕션)**
+- **PM2** - Node.js 프로세스 관리자
+- **Nginx** - 리버스 프록시
+- **AWS EC2** - 서버 호스팅 (Ubuntu)
 
 ---
 
