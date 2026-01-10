@@ -22,6 +22,7 @@ Amazon Web Services EC2 Instance Ubuntu에 프로젝트를 배포하는 걸 상�
 - [프로젝트 구조](#프로젝트-구조)
 - [보안 고려사항](#보안-고려사항)
 - [기술 스택](#기술-스택)
+- [API 문서 자동 생성](#api-문서-자동-생성)
 - [문서](#문서)
 
 ---
@@ -31,11 +32,14 @@ Amazon Web Services EC2 Instance Ubuntu에 프로젝트를 배포하는 걸 상�
 - ✅ JWT 기반 인증
 - ✅ 이메일 인증 시스템 (6자리 인증번호)
 - ✅ bcrypt 비밀번호 해싱
-- ✅ PostgreSQL 데이터베이스
+- ✅ PostgreSQL 데이터베이스 (사용자 정보 영구 저장)
+- ✅ Redis 캐시 (이메일 인증번호 임시 저장, Rate Limiting)
 - ✅ 상세한 오류 처리 및 디버깅 로그
 - ✅ CORS 지원
 - ✅ 입력값 유효성 검증
 - ✅ Rate limiting (인증번호 발송 제한)
+- ✅ OpenAPI 3.0 스펙 자동 생성
+- ✅ Unreal Engine C++ 구조체 연동 검증
 
 ---
 
@@ -107,17 +111,58 @@ CREATE DATABASE logindb;
 psql -U postgres -d logindb -f init.sql
 ```
 
-**기존 데이터베이스 업데이트 (이미 users 테이블이 있는 경우):**
-```powershell
-# 이메일 인증 기능만 추가
-psql -U postgres -d logindb -f migration_add_email_verification.sql
-```
-
 **⚠️ 중요**:
 - `init.sql`은 **신규 설치 전용**입니다. 기존 테이블이 있으면 건너뜁니다.
 - 프로덕션 환경에서 기능을 추가할 때는 **마이그레이션 스크립트**를 사용하세요.
 
-### 4. 새로운 SSH 키 추가 (오리지널 키가 없는 다른 PC에서 EC2 접속을 원하는 경우)
+### 4. Redis 설치 및 설정
+
+이메일 인증번호 발송 및 Rate Limiting 기능을 위해 Redis가 필요합니다.
+
+**Windows (로컬 개발):**
+```powershell
+# WSL2에 Redis 설치 (Windows 11)
+wsl --install
+wsl -d Ubuntu
+
+# Ubuntu 내부에서
+sudo apt update
+sudo apt install redis-server -y
+
+# Redis 서비스 시작
+sudo service redis-server start
+
+# Redis 연결 테스트
+redis-cli ping  # PONG 응답이 나오면 성공
+```
+
+**AWS EC2 Ubuntu:**
+```bash
+# Redis 설치
+sudo apt update
+sudo apt install redis-server -y
+
+# Redis 설정 파일 수정 (외부 접속 허용 - 선택사항)
+sudo nano /etc/redis/redis.conf
+# bind 127.0.0.1 → bind 0.0.0.0 (보안 주의!)
+
+# Redis 서비스 시작 및 자동 시작 설정
+sudo systemctl start redis-server
+sudo systemctl enable redis-server
+
+# Redis 상태 확인
+sudo systemctl status redis-server
+
+# Redis 연결 테스트
+redis-cli ping
+```
+
+**⚠️ Redis 보안 주의사항:**
+- 프로덕션 환경에서는 반드시 `requirepass` 설정으로 비밀번호 사용
+- EC2에서 Redis 포트(6379)는 localhost에서만 접근 가능하도록 설정
+- `.env` 파일의 `REDIS_PASSWORD` 환경 변수 설정
+
+### 5. 새로운 SSH 키 추가 (오리지널 키가 없는 다른 PC에서 EC2 접속을 원하는 경우)
 
 새 PC에서 AWS EC2 인스턴스에 접속하려면 SSH 키를 생성하고 등록해야 합니다.
 
@@ -149,20 +194,31 @@ ssh -i $HOME\.ssh\aws_key ubuntu@<EC2_PUBLIC_IP>
 `.env` 파일을 생성하고 다음 내용을 입력합니다:
 
 ```env
+# 서버 설정
 PORT=3000
+NODE_ENV=development  # 또는 production
+
+# PostgreSQL 데이터베이스 설정
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=your_actual_password   # PostgreSQL 비밀번호로 변경
 DB_NAME=logindb
+
+# JWT 토큰 설정
 JWT_SECRET=your-strong-secret-key  # 32자 강력한 비밀 키로 변경
+
+# Redis 설정 (이메일 인증번호 저장 및 Rate Limiting)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=                    # Redis 비밀번호 (설정한 경우)
 
 # 이메일 인증 설정 (Naver 메일 사용 예시)
 EMAIL_HOST=smtp.naver.com
 EMAIL_PORT=587
 EMAIL_SECURE=false
 EMAIL_USER=your_email@naver.com    # 발신 이메일 주소
-EMAIL_PASSWORD=your_email_password # Naver 계정 비밀번호
+EMAIL_PASSWORD=your_email_password # Naver 계정 비밀번호 또는 앱 비밀번호
 ```
 
 ### JWT 암호키 생성
@@ -285,6 +341,12 @@ node server.js
 
 서버가 `http://localhost:3000`에서 실행됩니다.
 
+**사용 가능한 NPM 스크립트:**
+```bash
+npm run docs    # API 문서 (OpenAPI 스펙) 자동 생성
+npm test        # 테스트 실행 (현재 미구현)
+```
+
 ### 프로덕션 환경 (PM2 사용)
 
 ```bash
@@ -383,7 +445,31 @@ EC2 인스턴스의 인바운드 규칙 예시:
 
 ### 헬스 체크
 ```
-GET /health
+GET /health/login
+```
+
+**응답 (200 OK):**
+```json
+{
+  "success": true,
+  "code": "HEALTH_CHECK_OK",
+  "message": "Login server is healthy",
+  "server": "mve-login-server",
+  "redis": "connected",
+  "timestamp": "2024-01-01T00:00:00.000Z"
+}
+```
+
+**응답 (503 Service Unavailable - Redis 연결 실패):**
+```json
+{
+  "success": false,
+  "code": "REDIS_UNAVAILABLE",
+  "message": "Redis connection failed",
+  "server": "mve-login-server",
+  "redis": "disconnected",
+  "timestamp": "2024-01-01T00:00:00.000Z"
+}
 ```
 
 ### 이메일 중복 확인
@@ -518,13 +604,19 @@ Authorization: Bearer <your_token>
 
 ### 웹 UI 테스트
 
-브라우저에서 `public/api_test.html`을 열어 간편하게 API를 테스트할 수 있습니다.
+브라우저에서 웹 UI를 통해 간편하게 API를 테스트할 수 있습니다.
 
+**API 테스트 페이지:**
 ```
-http://localhost:3000/api_test.html
+http://localhost:3000/api-test.html
 ```
+- 회원가입, 로그인, 프로필 조회 등 모든 API 엔드포인트 테스트 가능
+- 이메일 인증번호 발송 및 검증 기능 포함
+- JWT 토큰 자동 관리
 
-### PowerShell 예제
+### 명령줄 예제
+
+#### PowerShell 예제
 
 ```powershell
 # 1. 회원가입
@@ -565,7 +657,7 @@ $profile = Invoke-RestMethod -Uri "http://localhost:3000/api/auth/profile" `
 $profile.user | Format-List
 ```
 
-### curl 예제
+#### curl 예제 (Linux/macOS/Git Bash)
 
 ```bash
 # 회원가입
@@ -596,16 +688,28 @@ curl -X GET http://localhost:3000/api/auth/profile \
 
 ```
 mve-login-server/
-├── server.js           # Express 서버 설정
-├── db.js               # PostgreSQL 연결 풀
-├── .env                # 환경 변수
-├── init.sql            # 데이터베이스 초기화 SQL
+├── server.js                      # Express 서버 설정
+├── db.js                          # PostgreSQL 연결 풀
+├── redis-client.js                # Redis 클라이언트 설정
+├── .env                           # 환경 변수
+├── init.sql                       # 데이터베이스 초기화 SQL
 ├── routes/
-│   └── auth.js         # 인증 관련 라우트
-├── package.json        # 의존성 관리
-├── README.md           # 프로젝트 문서
-├── API_RESPONSES.md    # API 응답 형식 및 오류 코드
-└── API_TEST.md         # API 테스트 가이드
+│   └── auth.js                    # 인증 관련 라우트 (Swagger 주석 포함)
+├── schemas/
+│   └── api-schemas.js             # OpenAPI Component Schema 정의 (단일 소스)
+├── working-scripts/
+│   ├── generate-api-specs.js      # API 문서 자동 생성 스크립트
+│   ├── analyze-response-codes.js  # 응답 코드 통계 분석
+│   └── outputs/
+│       └── api-spec.json          # 생성된 OpenAPI 3.0 스펙 (Git 추적)
+├── public/
+│   └── api-test.html              # API 테스트 웹 UI
+├── docs/
+│   ├── API_RESPONSES.md           # API 응답 형식 및 오류 코드
+│   ├── API_TEST.md                # API 테스트 가이드
+│   └── ENV_SETUP.md               # 환경 변수 설정
+├── package.json                   # 의존성 관리
+└── README.md                      # 프로젝트 문서
 ```
 
 ---
@@ -660,9 +764,11 @@ mve-login-server/
 **환경 설정**
 - **dotenv** v17.2.3 - 환경 변수 관리
 
-**API 문서화** (루트 프로젝트)
-- **swagger-jsdoc** v6.2.8 - JSDoc 주석에서 OpenAPI 스펙 생성
-- **swagger-ui-express** v5.0.1 - Swagger UI 제공
+**API 문서화**
+- **swagger-jsdoc** - JSDoc 주석에서 OpenAPI 3.0 스펙 자동 생성
+  - `schemas/api-schemas.js`: Component Schema 정의 (단일 소스)
+  - `routes/*.js`: Swagger 주석으로 Response Schema 인라인 정의
+  - `working-scripts/generate-api-specs.js`: OpenAPI 스펙 생성 스크립트
 
 **인프라 (프로덕션)**
 - **PM2** - Node.js 프로세스 관리자
@@ -671,11 +777,69 @@ mve-login-server/
 
 ---
 
+## API 문서 자동 생성
+
+이 프로젝트는 코드 주석에서 OpenAPI 3.0 스펙을 자동 생성합니다.
+
+### 문서 생성 워크플로우
+
+```bash
+# 1. API 문서 생성 (OpenAPI 3.0 스펙)
+npm run docs
+
+# 생성 위치: working-scripts/outputs/api-spec.json
+```
+
+### 설계 원칙 (CLAUDE.md 참조)
+
+**Component Schema (재사용 가능한 타입)**
+- 정의 위치: `schemas/api-schemas.js` (단일 소스)
+- Unreal Engine 구조체와 매칭됨
+- **현재 정의된 스키마 (3개):**
+  - `User` - 사용자 정보 (id, email, createdAt)
+  - `SuccessResponse` - 기본 성공 응답 (success, code, message)
+  - `ErrorResponse` - 에러 응답 (success, code, message, details?, dbCode?)
+
+**Response Schema (엔드포인트별 응답)**
+- 정의 위치: `routes/*.js` (Swagger 주석 인라인)
+- Component Schema를 `$ref`로 참조
+- 공통 필드 (`success`, `code`, `message`) + 추가 필드 구조
+
+### API 추가 시 체크리스트
+
+1. 새로운 재사용 타입이 필요한가? → `schemas/api-schemas.js`에 추가
+2. `routes/*.js`에 Swagger 주석 작성 (requestBody, responses)
+3. `npm run docs` 실행하여 OpenAPI 스펙 생성
+4. 생성된 `api-spec.json`을 [Swagger Editor](https://editor.swagger.io/)에서 확인
+5. Git 커밋에 `working-scripts/outputs/api-spec.json` 포함
+
+### Unreal Engine 연동 검증
+
+프로젝트 루트에서 Python 검증 스크립트 실행:
+```bash
+python unreal/unreal-rider-python-validation-tool.example
+```
+
+**검증 항목:**
+- API 스펙의 모든 엔드포인트가 C++ 구조체로 정의되었는지 확인
+- Component Schema가 모두 USTRUCT로 존재하는지 확인
+- Required 필드가 모두 UPROPERTY로 정의되었는지 확인
+- MVE_API_RESPONSE_BASE 매크로 필드 자동 인식
+
+---
+
 ## 문서
 
+### 사용자 문서
 - **[API_RESPONSES.md](docs/API_RESPONSES.md)** - API 응답 형식 및 전체 오류 코드 목록
 - **[API_TEST.md](docs/API_TEST.md)** - 상세한 API 테스트 방법 및 예제
 - **[ENV_SETUP.md](docs/ENV_SETUP.md)** - 환경 변수 설정
+
+### 개발자 문서
+- **[CLAUDE.md](../CLAUDE.md)** - Claude AI 작업 가이드 (프로젝트 루트)
+  - API 추가/수정 프로세스
+  - Component Schema vs Response Schema 설계 원칙
+  - Unreal Engine 연동 검증 방법
 
 ---
 
